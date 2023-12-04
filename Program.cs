@@ -2,8 +2,7 @@
 using System.Reflection;
 using System.Text.Json;
 
-//string jsonString = File.ReadAllText("QuestionPath.json");
-
+// Konfiguration lesen
 string jsonString = File.ReadAllText("config.json");
 Config? config = JsonSerializer.Deserialize<Config>(jsonString);
 
@@ -48,7 +47,6 @@ var help = new
 
 var problemSolving = new
 {
-
 };
 
 var dateQuestion = new
@@ -70,7 +68,6 @@ var priority = new
     Mittel = new { },
     Niedrig = new { }
 };
-
 
 var customerQuestions = new
 {
@@ -118,49 +115,13 @@ InfoNode mainNode = new InfoNode()
 ;
 
 InfoNode currentNode = mainNode;
-//currentObj = questionPath;
-//currentObj = mainNode;
-//object? yesObj = new { };
-//object? noObj = new { };
 
-bool quit = false;
-
-while (currentNode.ChildNodes.Count > 0 && !quit)
+while (currentNode.ChildNodes.Count > 0)
 {
     Console.WriteLine();
 
-    //PropertyInfo[] properties = currentObj.GetType().GetProperties();
-
-    //foreach (PropertyInfo property in properties)
     foreach (InfoNode infoNode in currentNode.ChildNodes)
     {
-        //string propertyName = property.Name;
-        //string showLine = propertyName.Replace("_", " ");
-
-        // Wenn Ja/Nein Frage, dann (j/n) anhängen
-        /*
-        object? childObj = property.GetValue(currentObj);
-        yesObj = null;
-        noObj = null;
-        if (childObj is not null)
-        {
-            PropertyInfo[] childProperties = childObj.GetType().GetProperties();
-            foreach (PropertyInfo prop in childProperties)
-            {
-                if (prop.Name == "j")
-                {
-                    showLine += " (j";
-                    yesObj = prop.GetValue(childObj);
-                }
-                if (prop.Name == "n")
-                {
-                    showLine += "/n)";
-                    noObj = prop.GetValue(childObj);
-                }
-            }
-        }
-        */
-
         Console.WriteLine(infoNode.Caption);
     }
 
@@ -184,23 +145,8 @@ while (currentNode.ChildNodes.Count > 0 && !quit)
     }
     else
     {
-        //foreach (PropertyInfo property in properties)
         foreach (InfoNode infoNode in mainNode.ChildNodes)
         {
-            /*
-            if (yesObj is not null)
-            {
-                if (choice == "j")
-                {
-                    currentObj = yesObj;
-                }
-                else
-                {
-                    currentObj = noObj;
-                }
-            }
-            else
-            {*/
             if (infoNode.Caption is not null && infoNode.ChildNodes is not null)
             {
                 if (choice.Length > 1 && infoNode.Caption.ToUpper().Contains(choice.ToUpper()))
@@ -211,12 +157,10 @@ while (currentNode.ChildNodes.Count > 0 && !quit)
                 {
                     if (infoNode.Caption.StartsWith(choice))
                     {
-                        //currentObj = property.GetValue(currentObj);
                         currentNode = infoNode;
                     }
                 }
             }
-            //}
         }
     }
 }
