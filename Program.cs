@@ -4,22 +4,50 @@ using System.Text.Json;
 
 //string jsonString = File.ReadAllText("QuestionPath.json");
 //var questionPath = JsonSerializer.Deserialize<Object>(jsonString);
+string filePath = "config.json";
+
+// Read the JSON file as a string
+string jsonString = File.ReadAllText(filePath);
+
+// Deserialize the JSON string to a Config object
+Config? config = JsonSerializer.Deserialize<Config>(jsonString);
+
+
 
 var help = new
 {
     a_SDWorkflow = new
     {
-        Aufruf_mit_Parametern = new
+        In_Planung = new
         {
-            Parmeter_anzeigen = new { }
-        },
-        Objekte_aus_Datenbank = new { },
-        Aufgaben_verwalten = new
+            Aufruf_mit_Parametern = new
+            {
+                Parmeter_anzeigen = new { }
+            },
+            Objekte_aus_Datenbank = new
+            {
+            },
+            Objekte_mit_Daten = new { },
+            Email = new
+            {
+                Email_schreiben = new { },
+                Email_lesen = new { },
+                Email_beantworten = new { },
+            },
+            Aufgaben_verwalten = new
+            {
+                In_Asana_speichern = new { },
+                Zustaendiger = new { },
+                Termin = new { },
+                Prioritaet = new { }
+            }
+        }
+        Umgesetzt = new
         {
-            In_Asana_speichern = new { },
-            Zustaendiger = new { },
-            Termin = new { },
-            Prioritaet = new { }
+            User_verwalten = new
+            {
+                Eigener_User = "UserEMail in Config.json",
+            },
         }
     },
     b_GUSS_info = new { }
@@ -89,17 +117,13 @@ object? noObj = new { };
 
 while (currentObj is not null)
 {
-    //Console.WriteLine("Bitte wählen:");
     Console.WriteLine();
 
     PropertyInfo[] properties = currentObj.GetType().GetProperties();
 
-    //int i = 0;
     foreach (PropertyInfo property in properties)
     {
-        //i += 1;
         string propertyName = property.Name;
-        //Console.WriteLine(i.ToString() + ". " + propertyName);
         string showLine = propertyName.Replace("_", " ");
 
         // Wenn Ja/Nein Frage, dann (j/n) anhängen
@@ -127,16 +151,13 @@ while (currentObj is not null)
         Console.WriteLine(showLine);
     }
 
-    //ConsoleKeyInfo keyInfo = Console.ReadKey();
     string? choice = "";
     string? input = Console.ReadLine();
     if (input is not null)
     {
         choice = input;
     }
-    //int choice = int.Parse(keyInfo.KeyChar.ToString());
 
-    //i = 0;
     if (choice.Length == 0)
     {
         if (currentObj == questionPath)
@@ -152,8 +173,6 @@ while (currentObj is not null)
     {
         foreach (PropertyInfo property in properties)
         {
-            //i += 1;
-            //if (i == choice)
             if (yesObj is not null)
             {
                 if (choice == "j")
@@ -181,4 +200,9 @@ while (currentObj is not null)
             }
         }
     }
+}
+
+class Config
+{
+    public string? UserEmail { get; set; }
 }
