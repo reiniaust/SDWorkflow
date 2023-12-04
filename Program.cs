@@ -3,16 +3,9 @@ using System.Reflection;
 using System.Text.Json;
 
 //string jsonString = File.ReadAllText("QuestionPath.json");
-//var questionPath = JsonSerializer.Deserialize<Object>(jsonString);
-string filePath = "config.json";
 
-// Read the JSON file as a string
-string jsonString = File.ReadAllText(filePath);
-
-// Deserialize the JSON string to a Config object
+string jsonString = File.ReadAllText("config.json");
 Config? config = JsonSerializer.Deserialize<Config>(jsonString);
-
-
 
 var help = new
 {
@@ -41,7 +34,7 @@ var help = new
                 Termin = new { },
                 Prioritaet = new { }
             }
-        }
+        },
         Umgesetzt = new
         {
             User_verwalten = new
@@ -109,24 +102,43 @@ var questionPath = new
     b_Kundenauswahl = customers
 };
 
+InfoNode mainNode = new InfoNode()
+{
+    Caption = "SDWorkflow",
+    ChildNodes =
+    new List<InfoNode> {
+        new() { Caption = "Problem/Fehler" },
+        new() { Caption = "Hilfe", ChildNodes =
+    new List<InfoNode> {
+        new() { Caption = "SDWorkflow" },
+        new() { Caption = "GUSS info" }
+    } }
+    }
+}
+;
 
-object? currentObj;
-currentObj = questionPath;
-object? yesObj = new { };
-object? noObj = new { };
+InfoNode currentNode = mainNode;
+//currentObj = questionPath;
+//currentObj = mainNode;
+//object? yesObj = new { };
+//object? noObj = new { };
 
-while (currentObj is not null)
+bool quit = false;
+
+while (currentNode.ChildNodes.Count > 0 && !quit)
 {
     Console.WriteLine();
 
-    PropertyInfo[] properties = currentObj.GetType().GetProperties();
+    //PropertyInfo[] properties = currentObj.GetType().GetProperties();
 
-    foreach (PropertyInfo property in properties)
+    //foreach (PropertyInfo property in properties)
+    foreach (InfoNode infoNode in currentNode.ChildNodes)
     {
-        string propertyName = property.Name;
-        string showLine = propertyName.Replace("_", " ");
+        //string propertyName = property.Name;
+        //string showLine = propertyName.Replace("_", " ");
 
         // Wenn Ja/Nein Frage, dann (j/n) anhängen
+        /*
         object? childObj = property.GetValue(currentObj);
         yesObj = null;
         noObj = null;
@@ -147,8 +159,9 @@ while (currentObj is not null)
                 }
             }
         }
+        */
 
-        Console.WriteLine(showLine);
+        Console.WriteLine(infoNode.Caption);
     }
 
     string? choice = "";
@@ -160,19 +173,21 @@ while (currentObj is not null)
 
     if (choice.Length == 0)
     {
-        if (currentObj == questionPath)
+        if (currentNode == mainNode)
         {
-            currentObj = null;
+            currentNode = new InfoNode();
         }
         else
         {
-            currentObj = questionPath;
+            currentNode = mainNode;
         }
     }
     else
     {
-        foreach (PropertyInfo property in properties)
+        //foreach (PropertyInfo property in properties)
+        foreach (InfoNode infoNode in mainNode.ChildNodes)
         {
+            /*
             if (yesObj is not null)
             {
                 if (choice == "j")
@@ -185,19 +200,23 @@ while (currentObj is not null)
                 }
             }
             else
+            {*/
+            if (infoNode.Caption is not null && infoNode.ChildNodes is not null)
             {
-                if (choice.Length > 1 && property.Name.ToUpper().Contains(choice.ToUpper()))
+                if (choice.Length > 1 && infoNode.Caption.ToUpper().Contains(choice.ToUpper()))
                 {
-                    currentObj = property.GetValue(currentObj);
+                    currentNode = infoNode;
                 }
                 else
                 {
-                    if (property.Name.StartsWith(choice))
+                    if (infoNode.Caption.StartsWith(choice))
                     {
-                        currentObj = property.GetValue(currentObj);
+                        //currentObj = property.GetValue(currentObj);
+                        currentNode = infoNode;
                     }
                 }
             }
+            //}
         }
     }
 }
@@ -205,4 +224,11 @@ while (currentObj is not null)
 class Config
 {
     public string? UserEmail { get; set; }
+}
+
+class InfoNode
+{
+    public string Caption { get; set; } = "";
+    public object? InfoObject { get; set; }
+    public List<InfoNode> ChildNodes { get; set; } = new List<InfoNode>();
 }
