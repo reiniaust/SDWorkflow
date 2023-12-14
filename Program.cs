@@ -6,7 +6,9 @@ using Aspose.Email;
 using Aspose.Email.Clients.Smtp;
 using Aspose.Email.Clients;
 using System.Text;
-using Aspose.Email.Clients.Pop3;
+//using Aspose.Email.Clients.Pop3;
+using OpenPop.Mime;
+using OpenPop.Pop3;
 
 // Konfiguration lesen
 string jsonString = File.ReadAllText("config.json");
@@ -18,18 +20,18 @@ Config? config = JsonSerializer.Deserialize<Config>(jsonString);
 // E-Mail senden (Test)
 if (config is not null)
 {
-    //SenEmail(config, "Test aus SDWorkflow", "Hallo Welt", "reinhard.austermeier@gmail.com");
-    foreach (MailMessage message in ReadEmails(config))
+    //SenEmail(config, "reinhard.austermeier@gmail.com", "Test aus SDWorkflow", "Hallo Welt");
+    foreach (Message message in ReadEmails(config))
     {
-        Console.WriteLine(message.From);
-        Console.WriteLine(message.Subject);
-        Console.WriteLine(message.Body);
+        Console.WriteLine(message.Headers.From);
+        Console.WriteLine(message.Headers.Subject);
+        //Console.WriteLine(message.MessagePart.GetBodyAsText());
         Console.WriteLine("a Beantworten");
         Console.WriteLine("b Überspringen");
         string? input = Console.ReadLine();
         if (input == "a")
         {
-            SenEmail(config, message.From.Address, "AW: " + message.Subject, "Hallo, ich leite es weiter.");
+            SenEmail(config, message.Headers.From.Address, "AW: " + message.Headers.Subject, "Hallo, ich leite es weiter.");
         }
     }
 }
@@ -216,23 +218,32 @@ while (currentNode.ChildNodes.Count > 0)
     }
 }
 
-static List<MailMessage> ReadEmails(Config config) {
+static List<Message> ReadEmails(Config config) {
 
-    List<MailMessage> eMails = new();
+    List<Message> eMails = new();
 
     Pop3Client client = new() {
+        /*
         Host = config.PopHost,
         Port = config.PopPort,
         Username = config.Username,
         Password = config.SmtpPassword
+        */
     };
+
+    bool useSsl = true;
+    client.Connect(config.PopHost, config.PopPort, useSsl);
+    client.Authenticate(config.Username, config.SmtpPassword);
 
     int messageCount = client.GetMessageCount();
 
     for (int i = 1; i <= messageCount; i++)
     {
+        /*
         var messageInfo = client.GetMessageInfo(i);
-        MailMessage message = client.FetchMessage(messageInfo.SequenceNumber);
+        */
+        Message message = client.GetMessage(i);
+        // message = client.FetchMessage(messageInfo.SequenceNumber);
         eMails.Add(message);
         /*
         Console.WriteLine("Subject: " + message.Subject);
