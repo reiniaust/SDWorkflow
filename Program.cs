@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Reflection;
+using System.Collections.Generic;
 using System.Text.Json;
 using Outlook = Microsoft.Office.Interop.Outlook;
 using Aspose.Email;
@@ -15,6 +16,10 @@ string jsonString = File.ReadAllText("config.json");
 Config? config = JsonSerializer.Deserialize<Config>(jsonString);
 
 
+List<Person> persons = new()
+{
+    new() {LastName = "Austermeier", Email = "reinhard.austermeier@gmx.de", Salutation = "Hallo Herr Austermeier"}
+};
 
 
 // E-Mail senden (Test)
@@ -31,7 +36,26 @@ if (config is not null)
         string? input = Console.ReadLine();
         if (input == "a")
         {
-            SenEmail(config, message.Headers.From.Address, "AW: " + message.Headers.Subject, "Hallo, ich leite es weiter.");
+            string salutation = "Hallo,";
+            Person? person = persons.Find(p => p.Email == message.Headers.From.Address);
+            if (person is not null)
+            {
+                salutation = person.Salutation;
+            }
+
+            InfoNode infoNode = new() {
+                Caption = "Bearbeitung",
+                ChildNodes = new() {
+                    new() {Caption = "Sofort"},
+                    new() {Caption = "Heute"},
+                    new() {Caption = "Morgen"}
+                }
+            };
+            List<InfoNode> path = inputPath(infoNode);
+
+            string answer = salutation + ", dieser Punkt wird " + path.Last().Caption.ToLower() + " bearbeitet.";
+            
+            SenEmail(config, message.Headers.From.Address, "AW: " + message.Headers.Subject, answer);
         }
     }
 }
@@ -74,10 +98,6 @@ var help = new
         }
     },
     b_GUSS_info = new { }
-};
-
-var problemSolving = new
-{
 };
 
 var priority = new
@@ -162,60 +182,74 @@ InfoNode mainNode = new InfoNode()
 }
 ;
 
+
 InfoNode currentNode = mainNode;
 
-while (currentNode.ChildNodes.Count > 0)
-{
-    Console.WriteLine();
+inputPath(currentNode);
 
-    int ascii = 97;
-    foreach (InfoNode infoNode in currentNode.ChildNodes)
-    {
-        Console.WriteLine(((char) ascii).ToString() + " " + infoNode.Caption);
-        ascii++;
-    }
+List<InfoNode> inputPath(InfoNode currentNode) {
+    List<InfoNode> infoNodes = new();
 
-    string? choice = "";
-    string? input = Console.ReadLine();
-    if (input is not null)
+    if (currentNode is not null)
     {
-        choice = input;
-    }
+        InfoNode  mainNode = currentNode;
+        while (currentNode.ChildNodes.Count > 0)
+        {
+            Console.WriteLine();
 
-    if (choice.Length == 0)
-    {
-        if (currentNode == mainNode)
-        {
-            currentNode = new InfoNode();
-        }
-        else
-        {
-            currentNode = mainNode;
-        }
-    }
-    else
-    {
-        ascii = 97;
-        foreach (InfoNode infoNode in currentNode.ChildNodes)
-        {
-            if (infoNode.Caption is not null && infoNode.ChildNodes is not null)
+            int ascii = 97;
+            foreach (InfoNode infoNode in currentNode.ChildNodes)
             {
-                if (choice.Length > 1 && infoNode.Caption.ToUpper().Contains(choice.ToUpper()))
+                Console.WriteLine(((char) ascii).ToString() + " " + infoNode.Caption);
+                ascii++;
+            }
+
+            string? choice = "";
+            string? input = Console.ReadLine();
+            if (input is not null)
+            {
+                choice = input;
+            }
+
+            if (choice.Length == 0)
+            {
+                if (currentNode == mainNode)
                 {
-                    currentNode = infoNode;
+                    currentNode = new InfoNode();
                 }
                 else
                 {
-                    string label = ((char) ascii).ToString() + infoNode.Caption;
-                    if (label.StartsWith(choice))
+                    currentNode = mainNode;
+                }
+            }
+            else
+            {
+                ascii = 97;
+                foreach (InfoNode infoNode in currentNode.ChildNodes)
+                {
+                    if (infoNode.Caption is not null && infoNode.ChildNodes is not null)
                     {
-                        currentNode = infoNode;
+                        if (choice.Length > 1 && infoNode.Caption.ToUpper().Contains(choice.ToUpper()))
+                        {
+                            currentNode = infoNode;
+                        }
+                        else
+                        {
+                            string label = ((char) ascii).ToString() + infoNode.Caption;
+                            if (label.StartsWith(choice))
+                            {
+                                currentNode = infoNode;
+                            }
+                            ascii++;
+                        }
                     }
-                    ascii++;
+                    infoNodes.Add(currentNode);
                 }
             }
         }
     }
+
+    return infoNodes;
 }
 
 static List<Message> ReadEmails(Config config) {
@@ -311,4 +345,12 @@ class InfoNode
     public string Caption { get; set; } = "";
     public object? InfoObject { get; set; }
     public List<InfoNode> ChildNodes { get; set; } = new List<InfoNode>();
+}
+
+class Person
+{
+    public string? FirstName { get; set; }
+    public string LastName { get; set; } = "";
+    public string Salutation { get; set; } = ""; // Anrede z.B. Hallo Frau
+    public string Email { get; set; } = "";
 }
