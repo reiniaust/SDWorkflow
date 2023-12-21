@@ -2,7 +2,6 @@
 using System.Reflection;
 using System.Collections.Generic;
 using System.Text.Json;
-using Outlook = Microsoft.Office.Interop.Outlook;
 using Aspose.Email;
 using Aspose.Email.Clients.Smtp;
 using Aspose.Email.Clients;
@@ -12,14 +11,20 @@ using OpenPop.Mime;
 using OpenPop.Pop3;
 
 // Konfiguration lesen
-string jsonString = File.ReadAllText("config.json");
+string jsonString;
+jsonString = File.ReadAllText("config.json");
 Config? config = JsonSerializer.Deserialize<Config>(jsonString);
 
-
+jsonString = File.ReadAllText("persons.json");
+#pragma warning disable CS8600 // Converting null literal or possible null value to non-nullable type.
+List<Person> persons = JsonSerializer.Deserialize<List<Person>>(jsonString);
+#pragma warning restore CS8600 // Converting null literal or possible null value to non-nullable type.
+/*
 List<Person> persons = new()
 {
     new() {LastName = "Austermeier", Email = "reinhard.austermeier@gmx.de", Salutation = "Hallo Herr Austermeier"}
 };
+*/
 
 
 // E-Mail senden (Test)
@@ -36,11 +41,22 @@ if (config is not null)
         string? input = Console.ReadLine();
         if (input == "a")
         {
-            string salutation = "Hallo,";
+            string? salutation = "Hallo,";
             Person? person = persons.Find(p => p.Email == message.Headers.From.Address);
             if (person is not null)
             {
                 salutation = person.Salutation;
+            }
+            else
+            {
+                Console.WriteLine("Anrede (z.B. Hallo Frau Meier)");
+                salutation = Console.ReadLine();
+                if (salutation is not null)
+                {
+                    persons.Add(new() {Email = message.Headers.From.Address, Salutation = salutation});
+                }
+                jsonString = JsonSerializer.Serialize(persons);
+                File.WriteAllText("persons.json", jsonString);
             }
 
             InfoNode infoNode = new() {
@@ -54,6 +70,7 @@ if (config is not null)
             List<InfoNode> path = inputPath(infoNode);
 
             string answer = salutation + ", dieser Punkt wird " + path.Last().Caption.ToLower() + " bearbeitet.";
+            answer = EncodeText(answer);
             
             SenEmail(config, message.Headers.From.Address, "AW: " + message.Headers.Subject, answer);
         }
@@ -224,6 +241,7 @@ List<InfoNode> inputPath(InfoNode currentNode) {
             }
             else
             {
+                currentNode = new();
                 ascii = 97;
                 foreach (InfoNode infoNode in currentNode.ChildNodes)
                 {
@@ -243,8 +261,12 @@ List<InfoNode> inputPath(InfoNode currentNode) {
                             ascii++;
                         }
                     }
-                    infoNodes.Add(currentNode);
                 }
+                if (currentNode.Caption == "")
+                {
+                    currentNode.Caption = choice;
+                }
+                infoNodes.Add(currentNode);
             }
         }
     }
@@ -329,6 +351,14 @@ static void SenEmail(Config config, string to, string subject, string body)
     }
 }
 #pragma warning restore CS8321 // Local function is declared but never used
+
+static string EncodeText(string input)
+{
+    // Umlaute in UTF-8 codieren
+    byte[] utf8Bytes = Encoding.UTF8.GetBytes(input);
+    string encodedInput = Encoding.UTF8.GetString(utf8Bytes);
+    return encodedInput;
+}
 
 class Config
 {
