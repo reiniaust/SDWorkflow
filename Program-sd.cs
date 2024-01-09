@@ -2,30 +2,41 @@ using Newtonsoft.Json;
 using System;
 
 MyClass currentItem;
-MyClass cutItem = null;
+MyClass cutItem;
 List<MyClass> currentList;
 string json;
-json = File.ReadAllText("list.json");
-List<MyClass> data = JsonConvert.DeserializeObject<List<MyClass>>(json);
+List<MyClass> data;
+string? input = "r";
 
-currentItem = data[0];
-currentList = data.Where(item => item.ParentId== 1).ToList();
+while (input == "r")
+{
+    json = File.ReadAllText("list.json");
+    data = JsonConvert.DeserializeObject<List<MyClass>>(json);
 
-showList();
+    currentItem = data[0];
+    currentList = data.Where(item => item.ParentId== 1).ToList();
+    cutItem = null;
+
+    showList();
+    
+    saveData(); 
+}
 
 
-json = JsonConvert.SerializeObject(data, Formatting.Indented);
-
-File.WriteAllText("list.json", json);
+void saveData()
+{
+    json = JsonConvert.SerializeObject(data, Formatting.Indented);
+    File.WriteAllText("list.json", json);
+}
 
 
 void showList()
 {
     Console.Clear();
-    Console.WriteLine(currentItem.Name);
+    Console.WriteLine(currentItem.Name+ " (" + currentItem.TimeStamp + ")");
     Console.WriteLine();
     int i = 0;
-    foreach (MyClass item in currentList)
+    foreach (MyClass item in currentList.OrderBy(i => i.TimeStamp).ToList())
     {
         i += 1;
         item.Position = i;
@@ -35,21 +46,23 @@ void showList()
     Console.WriteLine();
     if (currentItem.Id != 1)
     {
+        Console.WriteLine("r Refresh");
         Console.WriteLine("z Zurück");
-        if (cutItem is null && currentItem.ParentId > 1)
+        if (cutItem is null)
         {
             Console.WriteLine("x Ausschneiden");
         }
-        if (cutItem is not null)
-        {
-            Console.WriteLine("v Einfügen");
-        }
+    }
+    if (cutItem is not null)
+    {
+        Console.WriteLine("v Einfügen");
     }
     Console.WriteLine("e Ende");
+    Console.WriteLine();
 
-    string? input = Console.ReadLine();
+    input = Console.ReadLine();
 
-    if (input != "e")
+    if (input != "e" && input != "r")
     {
         if (input == "z" && currentItem.ParentId != 0)
         {
@@ -68,7 +81,9 @@ void showList()
                 if (input == "v")
                 {
                     cutItem.ParentId = currentItem.Id;
+                    cutItem.TimeStamp = DateTime.Now;
                     cutItem = null;
+                    saveData();
                 }
                 else
                 {
@@ -84,17 +99,23 @@ void showList()
                     }
                     if (!found)
                     {
-                        currentItem = FoundChildItem(currentList, input);
+                        MyClass foundItem = FoundChildItem(currentList, input);
 
-                        if (currentItem is null)
+                        if (foundItem is null)
                         {
                             currentItem = new()
                             {
                                 Id = data.Max(item => item.Id) + 1,
                                 Name = input,
-                                ParentId = currentItem.Id
+                                ParentId = currentItem.Id,
+                                TimeStamp = DateTime.Now
                             };
                             data.Add(currentItem);
+                            saveData();
+                        }
+                        else
+                        {
+                            currentItem= foundItem;
                         }
                     }
                 }
@@ -136,7 +157,6 @@ void showList()
         }
         return path;
     }
-
 }
 
 class MyClass
@@ -145,5 +165,6 @@ class MyClass
     public string Name { get; set; } = "";
     public int ParentId { get; set; }
     public int Position { get; set; }
+    public DateTime TimeStamp { get; set; } = DateTime.Now;
 }
 
