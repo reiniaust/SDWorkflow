@@ -5,6 +5,7 @@ MyClass currentItem;
 MyClass newItem;
 MyClass modifyItem;
 MyClass cutItem;
+MyClass dependenceItem;
 List<MyClass> currentList;
 string json;
 List<MyClass> data;
@@ -29,6 +30,7 @@ while (input == "r")
     newItem = null;
     modifyItem = null;
     cutItem = null;
+    dependenceItem = null;
 
     showList();
 
@@ -59,12 +61,54 @@ void showList()
         Console.WriteLine(item.Position + " " + item.Name + plus);
     }
 
+    if (currentItem.DependenceIds.Count > 0)
+    {
+        Console.WriteLine();
+        Console.WriteLine("Anhängigkeiten:");
+        foreach (int id in currentItem.DependenceIds)
+        {
+            MyClass depItem = data.Find(item => item.Id == id);
+            if (depItem != null)
+            {
+                i += 1;
+                depItem.Position = i;
+                Console.WriteLine(depItem.Position + " " + depItem.Name);
+            }
+        }
+    }
+
+    // Verwendungen anzeigen
+    bool uses = false;
+    foreach (var item in data)
+    {
+        if (item.DependenceIds.Contains(currentItem.Id))
+        {
+            if (!uses)
+            {
+                uses = true;
+                Console.WriteLine();
+                Console.WriteLine("Verwendungen:");
+            }
+            i += 1;
+            item.Position = i;
+            Console.WriteLine(item.Position + " " + item.Name);
+        }
+    }
+
     Console.WriteLine();
     Console.WriteLine("h Hinzufügen");
     if (currentItem.Id != 1)
     {
         Console.WriteLine("ä Ändern");
         Console.WriteLine("l Löschen/Ausschneiden");
+        if (dependenceItem is null)
+        {
+            Console.WriteLine("a Abhängigkeit hinzufügen");
+        }
+        else 
+        {
+            Console.WriteLine("a Abhängigkeit setzen");
+        }
     }
     if (cutItem is not null)
     {
@@ -129,50 +173,97 @@ void showList()
                         newItem = new();
                     }
                     else
+                    {
+                        if (input == "a")
                         {
-                        if (input == "ä")
-                        {
-                            // Ändern
-                            modifyItem = currentItem;
+                            // Abhängigkeit
+                            if (dependenceItem is null)
+                            {
+                                dependenceItem = currentItem;
+                            }
+                            else 
+                            {
+                                dependenceItem.DependenceIds.Add(currentItem.Id);
+                                currentItem = dependenceItem;
+                                saveData();
+                                dependenceItem = null;
+                            }
                         }
                         else
                         {
-                            if (input == "l")
+                            if (input == "ä")
                             {
-                                // Löschen/Ausschneiden
-                                cutItem = currentItem;
-                                currentItem = data.Find(item => item.Id == currentItem.ParentId);
-                                cutItem.ParentId = 0;
+                                // Ändern
+                                modifyItem = currentItem;
                             }
                             else
                             {
-                                if (input == "e")
+                                if (input == "l")
                                 {
-                                    // Einfügen
-                                    cutItem.ParentId = currentItem.Id;
-                                    cutItem.TimeStamp = DateTime.Now;
-                                    cutItem = null;
-                                    saveData();
+                                    // Löschen/Ausschneiden
+                                    cutItem = currentItem;
+                                    currentItem = data.Find(item => item.Id == currentItem.ParentId);
+                                    cutItem.ParentId = 0;
                                 }
                                 else
                                 {
-                                    bool found = false;
-                                    foreach (MyClass item in currentList)
+                                    if (input == "e")
                                     {
-                                        if (input == item.Position.ToString() || item.Name.ToLower().Contains(input.ToLower()))
-                                        {
-                                            currentItem = item;
-                                            found = true;
-                                            break;
-                                        }
+                                        // Einfügen
+                                        cutItem.ParentId = currentItem.Id;
+                                        cutItem.TimeStamp = DateTime.Now;
+                                        cutItem = null;
+                                        saveData();
                                     }
-                                    if (!found)
+                                    else
                                     {
-                                        MyClass foundItem = FoundChildItem(currentList, input);
+                                        bool found = false;
+                                        foreach (MyClass item in currentList)
+                                        {
+                                            if (input == item.Position.ToString() || item.Name.ToLower().Contains(input.ToLower()))
+                                            {
+                                                currentItem = item;
+                                                found = true;
+                                                break;
+                                            }
+                                        }
+                                        if (!found)
+                                        {
+                                            // Abhängigkeit suchen/aufrufen
+                                            foreach (int id in currentItem.DependenceIds)
+                                            {
+                                                MyClass depItem = data.Find(item => item.Id == id);
+                                                if (input == depItem.Position.ToString() || depItem.Name.ToLower().Contains(input.ToLower()))
+                                                {
+                                                    currentItem = depItem;
+                                                    found = true;
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                        if (!found)
+                                        {
+                                            foreach (var item in data)
+                                            {
+                                                if (item.DependenceIds.Contains(currentItem.Id))
+                                                {
+                                                    if (input == item.Position.ToString() || item.Name.ToLower().Contains(input.ToLower()))
+                                                    {
+                                                        currentItem = item;
+                                                        found = true;
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        if (!found)
+                                        {
+                                            MyClass foundItem = FoundChildItem(currentList, input);
 
-                                        // Neuen Punkt anlegen/hinzufügen
-                                        if (foundItem is not null)
-                                            currentItem = foundItem;
+                                            // Neuen Punkt anlegen/hinzufügen
+                                            if (foundItem is not null)
+                                                currentItem = foundItem;
+                                            }
                                         }
                                     }
                                 }
@@ -230,7 +321,6 @@ class MyClass
     public string Name { get; set; } = "";
     public int ParentId { get; set; }
     public int Position { get; set; }
+    public List<int> DependenceIds { get; set; } = new List<int>();    
     public DateTime TimeStamp { get; set; } = DateTime.Now;
 }
-
-
