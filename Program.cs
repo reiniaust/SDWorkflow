@@ -1,5 +1,7 @@
 using Newtonsoft.Json;
 using System;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
 
 MyClass currentItem;
 MyClass newItem;
@@ -11,6 +13,9 @@ string json;
 List<MyClass> data;
 string? input = "r";
 string filePath = @"S:\SDWorkflow\data.json";
+
+
+HelperClass.SetForeground("Outlook");
 
 while (input == "r")
 {
@@ -45,6 +50,19 @@ void saveData()
 
 void showList()
 {
+    if (currentItem.Name.Contains(".txt"))
+    {
+        try
+        {
+            Process.Start("notepad.exe", currentItem.Name);
+        }
+        catch (Exception ex)
+        { 
+            Console.WriteLine(ex.Message);
+            Console.ReadLine();
+        }
+    }
+
     Console.Clear();
     Console.WriteLine(currentItem.Name + " (" + currentItem.TimeStamp + ")");
     Console.WriteLine();
@@ -105,7 +123,7 @@ void showList()
         {
             Console.WriteLine("a Abhängigkeit hinzufügen");
         }
-        else 
+        else
         {
             Console.WriteLine("a Abhängigkeit setzen");
         }
@@ -181,7 +199,7 @@ void showList()
                             {
                                 dependenceItem = currentItem;
                             }
-                            else 
+                            else
                             {
                                 dependenceItem.DependenceIds.Add(currentItem.Id);
                                 currentItem = dependenceItem;
@@ -263,7 +281,6 @@ void showList()
                                             // Neuen Punkt anlegen/hinzufügen
                                             if (foundItem is not null)
                                                 currentItem = foundItem;
-                                            }
                                         }
                                     }
                                 }
@@ -271,6 +288,7 @@ void showList()
                         }
                     }
                 }
+            }
         }
         if (currentItem != null)
         {
@@ -321,6 +339,27 @@ class MyClass
     public string Name { get; set; } = "";
     public int ParentId { get; set; }
     public int Position { get; set; }
-    public List<int> DependenceIds { get; set; } = new List<int>();    
+    public List<int> DependenceIds { get; set; } = new List<int>();
     public DateTime TimeStamp { get; set; } = DateTime.Now;
+}
+
+class HelperClass
+{
+    [DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    public static void SetForeground(string appName)
+    {
+        Process[] processes = Process.GetProcessesByName(appName);
+
+        if (processes.Length > 0)
+        {
+            IntPtr mainWindowHandle = processes[0].MainWindowHandle;
+            SetForegroundWindow(mainWindowHandle);
+        }
+        else
+        {
+            Console.WriteLine("Outlook is not running.");
+        }
+    }
 }
