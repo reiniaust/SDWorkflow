@@ -12,16 +12,22 @@ List<MyClass> currentList;
 string json;
 List<MyClass> data;
 string? input = "r";
-string filePath = @"S:\SDWorkflow\data.json";
+string filePath = @"S:\SDWorkflow\";
+string fileName = "data.json";
+string fileNameToDay = "data" + DateTime.Today.ToString().Split(" ")[0].Replace(".","") + ".json";
+string varName = "";
+string varValue = "";
 
 
-HelperClass.SetForeground("Outlook");
+//HelperClass.SetForeground("Outlook");
+executeCommand("subst s: \"g:\\Meine Ablage\"");
+
 
 while (input == "r")
 {
     try
     {
-        json = File.ReadAllText(filePath);
+        json = File.ReadAllText(filePath + fileName);
         data = JsonConvert.DeserializeObject<List<MyClass>>(json);
     }
     catch (System.Exception)
@@ -45,71 +51,83 @@ while (input == "r")
 void saveData()
 {
     json = JsonConvert.SerializeObject(data, Formatting.Indented);
-    File.WriteAllText(filePath, json);
+    File.WriteAllText(filePath + fileName, json);
+    File.WriteAllText(filePath + fileNameToDay, json);
 }
 
 void showList()
 {
-    if (currentItem.Name.Contains(".txt"))
-    {
-        try
-        {
-            Process.Start("notepad.exe", currentItem.Name);
-        }
-        catch (Exception ex)
-        { 
-            Console.WriteLine(ex.Message);
-            Console.ReadLine();
-        }
-    }
-
     Console.Clear();
-    Console.WriteLine(currentItem.Name + " (" + currentItem.TimeStamp + ")");
-    Console.WriteLine();
-    int i = 0;
-    foreach (MyClass item in currentList.OrderBy(i => i.TimeStamp).ToList())
+
+    if (input == "")
     {
-        i += 1;
-        item.Position = i;
-        string plus = "";
-        if (data.Where(child => child.ParentId == item.Id).ToList().Count > 0)
+        setVariableOrExecuteCommand(currentItem.Name);
+
+        // Text-Datei öffnen
+        if (currentItem.Name.Contains(".txt"))
         {
-            plus = " +";
+            try
+            {
+                Process.Start("notepad.exe", currentItem.Name);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+                Console.ReadLine();
+            }
         }
-        Console.WriteLine(item.Position + " " + item.Name + plus);
     }
 
-    if (currentItem.DependenceIds.Count > 0)
+
+    // Daten anzeigen
     {
+        Console.WriteLine(currentItem.Name + " (" + currentItem.TimeStamp + ")");
         Console.WriteLine();
-        Console.WriteLine("Anhängigkeiten:");
-        foreach (int id in currentItem.DependenceIds)
+        int i = 0;
+        foreach (MyClass item in currentList.OrderBy(i => i.TimeStamp).ToList())
         {
-            MyClass depItem = data.Find(item => item.Id == id);
-            if (depItem != null)
-            {
-                i += 1;
-                depItem.Position = i;
-                Console.WriteLine(depItem.Position + " " + depItem.Name);
-            }
-        }
-    }
-
-    // Verwendungen anzeigen
-    bool uses = false;
-    foreach (var item in data)
-    {
-        if (item.DependenceIds.Contains(currentItem.Id))
-        {
-            if (!uses)
-            {
-                uses = true;
-                Console.WriteLine();
-                Console.WriteLine("Verwendungen:");
-            }
             i += 1;
             item.Position = i;
-            Console.WriteLine(item.Position + " " + item.Name);
+            string plus = "";
+            if (data.Where(child => child.ParentId == item.Id).ToList().Count > 0)
+            {
+                plus = " +";
+            }
+            Console.WriteLine(item.Position + " " + item.Name + plus);
+        }
+
+        if (currentItem.DependenceIds.Count > 0)
+        {
+            Console.WriteLine();
+            Console.WriteLine("Anhängigkeiten:");
+            foreach (int id in currentItem.DependenceIds)
+            {
+                MyClass depItem = data.Find(item => item.Id == id);
+                if (depItem != null)
+                {
+                    i += 1;
+                    depItem.Position = i;
+                    Console.WriteLine(depItem.Position + " " + depItem.Name);
+                }
+            }
+        }
+
+        // Verwendungen anzeigen
+        bool uses = false;
+        foreach (var item in data)
+        {
+            if (item.DependenceIds.Contains(currentItem.Id))
+            {
+                if (!uses)
+                {
+                    uses = true;
+                    Console.WriteLine();
+                    Console.WriteLine("Verwendungen:");
+                }
+                i += 1;
+                item.Position = i;
+                Console.WriteLine(item.Position + " " + item.Name);
+            }
         }
     }
 
@@ -132,6 +150,10 @@ void showList()
     {
         Console.WriteLine("e Einfügen");
     }
+    if (currentList.Where(item => item.Name.StartsWith("Befehl:") || item.Name.StartsWith("[")).Count() > 0)
+    {
+        Console.WriteLine("b Befehle ausführen und/oder Platzhalter zuweisen");
+    }
     if (currentItem.Id != 1)
     {
         Console.WriteLine("z Zurück");
@@ -147,7 +169,7 @@ void showList()
     {
         // Ändern
         Console.WriteLine("Neuer Titel:");
-    }
+    } 
 
     input = Console.ReadLine();
 
@@ -235,52 +257,67 @@ void showList()
                                     }
                                     else
                                     {
-                                        bool found = false;
-                                        foreach (MyClass item in currentList)
+                                        // Befehle ausführen
+                                        if (input == "b")
                                         {
-                                            if (input == item.Position.ToString() || item.Name.ToLower().Contains(input.ToLower()))
+                                            foreach (var item in currentList.Where(item => item.Name.StartsWith("Befehl:") || item.Name.StartsWith("[")).ToList())
                                             {
-                                                currentItem = item;
-                                                found = true;
-                                                break;
+                                                setVariableOrExecuteCommand(item.Name);
                                             }
+                                            Console.WriteLine("Beliebige Taste drücken...");
+                                            Console.ReadKey();
                                         }
-                                        if (!found)
+                                        else
                                         {
-                                            // Abhängigkeit suchen/aufrufen
-                                            foreach (int id in currentItem.DependenceIds)
+                                            bool found = false;
+                                            foreach (MyClass item in currentList)
                                             {
-                                                MyClass depItem = data.Find(item => item.Id == id);
-                                                if (input == depItem.Position.ToString() || depItem.Name.ToLower().Contains(input.ToLower()))
+                                                if (input == item.Position.ToString() || item.Name.ToLower().Contains(input.ToLower()))
                                                 {
-                                                    currentItem = depItem;
+                                                    currentItem = item;
                                                     found = true;
                                                     break;
                                                 }
                                             }
-                                        }
-                                        if (!found)
-                                        {
-                                            foreach (var item in data)
+                                            if (!found)
                                             {
-                                                if (item.DependenceIds.Contains(currentItem.Id))
+                                                // Abhängigkeit suchen/aufrufen
+                                                foreach (int id in currentItem.DependenceIds)
                                                 {
-                                                    if (input == item.Position.ToString() || item.Name.ToLower().Contains(input.ToLower()))
+                                                    MyClass depItem = data.Find(item => item.Id == id);
+                                                    if (input == depItem.Position.ToString() || depItem.Name.ToLower().Contains(input.ToLower()))
                                                     {
-                                                        currentItem = item;
+                                                        currentItem = depItem;
                                                         found = true;
                                                         break;
                                                     }
                                                 }
                                             }
-                                        }
-                                        if (!found)
-                                        {
-                                            MyClass foundItem = FoundChildItem(currentList, input);
+                                            if (!found)
+                                            {
+                                                foreach (var item in data)
+                                                {
+                                                    if (item.DependenceIds.Contains(currentItem.Id))
+                                                    {
+                                                        if (input == item.Position.ToString() || item.Name.ToLower().Contains(input.ToLower()))
+                                                        {
+                                                            currentItem = item;
+                                                            found = true;
+                                                            break;
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            if (!found)
+                                            {
+                                                MyClass foundItem = FoundChildItem(currentList, input);
 
-                                            // Neuen Punkt anlegen/hinzufügen
-                                            if (foundItem is not null)
-                                                currentItem = foundItem;
+                                                // Neuen Punkt anlegen/hinzufügen
+                                                if (foundItem is not null)
+                                                    currentItem = foundItem;
+                                            }
+
+                                            input = "";
                                         }
                                     }
                                 }
@@ -331,6 +368,56 @@ void showList()
         }
         return path;
     }
+}
+
+void setVariableOrExecuteCommand(string itemName)
+{
+    // Varibale (Platzhalter lesen)
+    if (itemName.StartsWith("["))
+    {
+        varName = itemName.Split("=")[0];
+        varValue = itemName.Split("=")[1];
+    }
+
+    // Befehl ausführen
+    if (itemName.StartsWith("Befehl:"))
+    {
+        string cmd = itemName.Split("Befehl:")[1];
+        if (varName != "")
+        {
+            cmd = cmd.Replace(varName, varValue);
+        }
+        executeCommand(cmd);
+    }
+}
+
+void executeCommand(string command)
+{
+    //string command = "subst s: \"g:\\Meine Ablage\""; // Replace with the CMD command you want to run
+    Console.WriteLine(command);
+
+    Process process = new Process();
+    ProcessStartInfo startInfo = new ProcessStartInfo();
+
+    startInfo.FileName = "cmd.exe"; // Specify the CMD executable
+    startInfo.Arguments = "/C " + command; // Specify the command to execute
+    startInfo.RedirectStandardOutput = true;
+    startInfo.UseShellExecute = false;
+    startInfo.CreateNoWindow = true;
+
+    process.StartInfo = startInfo;
+    process.Start();
+
+    // Read the output of the command
+    string output = process.StandardOutput.ReadToEnd();
+
+    // Wait for the command to finish executing
+    process.WaitForExit();
+
+    Console.WriteLine(output);
+
+    //Console.WriteLine("Beliebige Taste drücken...");
+    //Console.ReadKey();
 }
 
 class MyClass
