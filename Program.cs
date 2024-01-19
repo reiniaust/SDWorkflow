@@ -60,26 +60,17 @@ void showList()
     if (input == "")
     {
         setVariableOrExecuteCommand(currentItem.Name);
-
-        // Text-Datei öffnen
-        if (currentItem.Name.Contains(".txt"))
-        {
-            try
-            {
-                Process.Start("notepad.exe", currentItem.Name);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.Message);
-                Console.ReadLine();
-            }
-        }
     }
 
 
     // Daten anzeigen
     {
-        Console.WriteLine(currentItem.Name + " (" + currentItem.TimeStamp + ")");
+        string done = "";
+        if (currentItem.Done)
+        {
+            done = "Erledigt ";
+        }
+        Console.WriteLine(currentItem.Name + " (" + done + currentItem.TimeStamp + ")");
         Console.WriteLine();
 
         if (currentItem.Name.StartsWith("Termine"))
@@ -105,7 +96,7 @@ void showList()
             }
             if (plus == "")
             {
-                foreach (var depItem in data)
+                foreach (var depItem in data.Where(item => !item.Done))
                 {
                     if (depItem.DependenceIds.Contains(item.Id))
                     {
@@ -117,7 +108,12 @@ void showList()
 
             setParameter(item.Name);
 
-            Console.WriteLine(item.Position + " " + replaceParameterValueInText(item.Name) + plus);
+            done = "";
+            if (item.Done)
+            {
+                done = " (Erledigt)";
+            }
+            Console.WriteLine(item.Position + " " + replaceParameterValueInText(item.Name) + done + plus);
         }
 
         // Anhängigkeiten anzeigen
@@ -139,7 +135,7 @@ void showList()
 
         // Verwendungen anzeigen
         bool uses = false;
-        foreach (var item in data)
+        foreach (var item in data.Where(item => !item.Done)) // Nur nicht erledigte Punkte anzeigen
         {
             if (item.DependenceIds.Contains(currentItem.Id))
             {
@@ -161,20 +157,36 @@ void showList()
     if (currentItem.Id != 1)
     {
         Console.WriteLine("ä Ändern");
-        Console.WriteLine("l Löschen/Ausschneiden");
-        if (dependenceItem is null)
+        if (cutItem is null)
         {
-            Console.WriteLine("a Abhängigkeit hinzufügen");
+            Console.WriteLine("a Ausschneiden");
+            Console.WriteLine("l Löschen");
         }
         else
         {
-            Console.WriteLine("a Abhängigkeit setzen");
+            Console.WriteLine("a Ausgeschnittenen Punkt einfügen");
         }
+
+        if (currentItem.Done)
+        {
+            Console.WriteLine("e Auf Nicht Erledigt setzen");
+        }
+        else
+        {
+            Console.WriteLine("e Auf Erledigt setzen");
+        }
+
+        if (dependenceItem is null)
+        {
+            Console.WriteLine("v Verknüpfung/Abhängigkeit hinzufügen");
+        }
+        else
+        {
+            Console.WriteLine("v Verknüpfung/Abhängigkeit setzen");
+        }
+
     }
-    if (cutItem is not null)
-    {
-        Console.WriteLine("e Einfügen des ausgeschnittenen Punktes");
-    }
+
     if (currentList.Where(item => item.Name.StartsWith("Befehl:") || item.Name.StartsWith("[")).Count() > 0)
     {
         Console.WriteLine("b Befehle ausführen und/oder Platzhalter zuweisen");
@@ -239,17 +251,18 @@ void showList()
                     }
                     else
                     {
-                        if (input == "a")
+                        if (input == "v")
                         {
-                            // Abhängigkeit
+                            // Verknüpfung/Abhängigkeit
                             if (dependenceItem is null)
                             {
                                 dependenceItem = currentItem;
                             }
                             else
                             {
+                                dependenceItem = data.Find(item => item.Id == dependenceItem.Id);
                                 dependenceItem.DependenceIds.Add(currentItem.Id);
-                                currentItem = dependenceItem;
+                                currentItem= dependenceItem;
                                 saveData();
                                 dependenceItem = null;
                             }
@@ -263,96 +276,119 @@ void showList()
                             }
                             else
                             {
-                                if (input == "l")
+                                if (input == "a")
                                 {
-                                    // Löschen/Ausschneiden
-                                    cutItem = currentItem;
-                                    currentItem = data.Find(item => item.Id == currentItem.ParentId);
-                                    cutItem.ParentId = 0;
-                                }
-                                else
-                                {
-                                    if (input == "e")
+                                    // Ausschneiden
+                                    if (cutItem is null)
                                     {
-                                        // Einfügen
+                                        cutItem = currentItem;
+                                        currentItem = data.Find(item => item.Id == currentItem.ParentId);
+                                        cutItem.ParentId = 0;
+                                    }
+                                    else
+                                    {
+                                        // Ausgeschnittenen Punkt einfügen
                                         cutItem.ParentId = currentItem.Id;
                                         cutItem.TimeStamp = DateTime.Now;
                                         saveData();
                                         cutItem = null;
                                     }
+                                }
+                                else
+                                {
+                                    if (input == "l")
+                                    {
+                                        // Löschen
+                                        data.Remove(currentItem);
+                                        saveData();
+                                        currentItem = data.Find(item => item.Id == currentItem.ParentId);
+                                    }
                                     else
                                     {
-                                        // Befehle ausführen
-                                        if (input == "b")
+                                        if (input == "e")
                                         {
-                                            foreach (var item in currentList.Where(item => item.Name.StartsWith("Befehl:") || item.Name.StartsWith("[")).ToList())
-                                            {
-                                                setVariableOrExecuteCommand(item.Name);
-                                            }
-                                            Console.WriteLine("Beliebige Taste drücken...");
-                                            Console.ReadKey();
+                                            // Erledigt/Unerledigt
+                                            currentItem.Done = !currentItem.Done;
+                                            currentItem.TimeStamp = DateTime.Now;
+                                            saveData();
                                         }
-                                        else { 
-                                        if (currentItem.Name.Contains("]="))
+                                        else
+                                        {
+                                            // Befehle ausführen
+                                            if (input == "b")
                                             {
-                                                // Parameter setzen (z.B. [Faelligkeit]=morgen)
-                                                currentItem.Name = currentItem.Name.Split('=')[0] + "=" + input;
-                                                setParameter(currentItem.Name); 
-                                                saveData();
-                                                // eine Ebene zurückgehen
-                                                currentItem = data.Find(item => item.Id == currentItem.ParentId); 
+                                                foreach (var item in currentList.Where(item => item.Name.StartsWith("Befehl:") || item.Name.StartsWith("[")).ToList())
+                                                {
+                                                    setVariableOrExecuteCommand(item.Name);
+                                                }
+                                                Console.WriteLine("Beliebige Taste drücken...");
+                                                Console.ReadKey();
                                             }
                                             else
                                             {
-                                                bool found = false;
-                                                foreach (MyClass item in currentList)
+                                                if (currentItem.Name.Contains("]="))
                                                 {
-                                                    if (input == item.Position.ToString() || item.Name.ToLower().Contains(input.ToLower()))
-                                                    {
-                                                        currentItem = item;
-                                                        found = true;
-                                                        break;
-                                                    }
+                                                    // Parameter setzen (z.B. [Faelligkeit]=morgen)
+                                                    currentItem.Name = currentItem.Name.Split('=')[0] + "=" + input;
+                                                    setParameter(currentItem.Name);
+                                                    saveData();
+                                                    // eine Ebene zurückgehen
+                                                    currentItem = data.Find(item => item.Id == currentItem.ParentId);
                                                 }
-                                                if (!found)
+                                                else
                                                 {
-                                                    // Abhängigkeit suchen/aufrufen
-                                                    foreach (int id in currentItem.DependenceIds)
+                                                    int number;
+                                                    bool isNumber = int.TryParse(input, out number);
+                                                    bool found = false;
+                                                    foreach (MyClass item in currentList)
                                                     {
-                                                        MyClass depItem = data.Find(item => item.Id == id);
-                                                        if (input == depItem.Position.ToString() || depItem.Name.ToLower().Contains(input.ToLower()))
+                                                        if (isNumber && number == item.Position || !isNumber && item.Name.ToLower().Contains(input.ToLower()))
                                                         {
-                                                            currentItem = depItem;
+                                                            currentItem = item;
                                                             found = true;
                                                             break;
                                                         }
                                                     }
-                                                }
-                                                if (!found)
-                                                {
-                                                    foreach (var item in data)
+                                                    if (!found)
                                                     {
-                                                        if (item.DependenceIds.Contains(currentItem.Id))
+                                                        // Verknüpfung/Abhängigkeit suchen/aufrufen
+                                                        foreach (int id in currentItem.DependenceIds)
                                                         {
-                                                            if (input == item.Position.ToString() || item.Name.ToLower().Contains(input.ToLower()))
+                                                            MyClass depItem = data.Find(item => item.Id == id);
+                                                            if (input == depItem.Position.ToString() || depItem.Name.ToLower().Contains(input.ToLower()))
                                                             {
-                                                                currentItem = item;
+                                                                currentItem = depItem;
                                                                 found = true;
                                                                 break;
                                                             }
                                                         }
                                                     }
-                                                }
-                                                if (!found)
-                                                {
-                                                    MyClass foundItem = FoundChildItem(currentList, input);
+                                                    if (!found)
+                                                    {
+                                                        foreach (var item in data)
+                                                        {
+                                                            if (item.DependenceIds.Contains(currentItem.Id))
+                                                            {
+                                                                if (input == item.Position.ToString() || item.Name.ToLower().Contains(input.ToLower()))
+                                                                {
+                                                                    currentItem = item;
+                                                                    found = true;
+                                                                    break;
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                    if (!found)
+                                                    {
+                                                        MyClass foundItem = FoundChildItem(currentList, input);
 
-                                                    // Neuen Punkt anlegen/hinzufügen
-                                                    if (foundItem is not null)
-                                                        currentItem = foundItem;
-                                                }
+                                                        // Neuen Punkt anlegen/hinzufügen
+                                                        if (foundItem is not null)
+                                                            currentItem = foundItem;
+                                                    }
 
-                                                input = "";
+                                                    input = "";
+                                                }
                                             }
                                         }
                                     }
@@ -449,12 +485,16 @@ void setVariableOrExecuteCommand(string itemName)
 
         executeCommand(cmd);
     }
+    if (itemName.Contains(@":\"))
+    {
+        executeCommand(itemName);
+    }
 }
 
 void executeCommand(string command)
 {
     //string command = "subst s: \"g:\\Meine Ablage\""; // Replace with the CMD command you want to run
-    Console.WriteLine(command);
+    //Console.WriteLine(command);
 
     Process process = new Process();
     ProcessStartInfo startInfo = new ProcessStartInfo();
@@ -501,18 +541,15 @@ DateTime dateFromWord(string dateString)
     return dateTime;
 }
 
-class MyClass : ICloneable
+class MyClass
 {
     public int Id { get; set; }
     public string Name { get; set; } = "";
     public int ParentId { get; set; }
     public int Position { get; set; }
     public List<int> DependenceIds { get; set; } = new List<int>();
+    public bool Done { get; set; } = false;
     public DateTime TimeStamp { get; set; } = DateTime.Now;
-    public object Clone()
-    {
-        return this.MemberwiseClone();
-    }
 }
 
 class HelperClass
