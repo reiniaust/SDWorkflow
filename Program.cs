@@ -55,7 +55,12 @@ void saveData()
 
 void showList()
 {
-    Console.Clear();
+    try
+    {
+        Console.Clear();
+    }
+    catch (System.Exception)
+    {}
 
     if (input == "")
     {
@@ -534,7 +539,7 @@ DateTime dateFromWord(string dateString)
     }
     if (dateString.EndsWith("."))
     {
-        string format = "d.M.";
+        string format = "d.M.yyyy";
         string fullDateString = dateString + DateTime.Today.Year.ToString();
         DateTime.TryParseExact(fullDateString, format, null, System.Globalization.DateTimeStyles.None, out dateTime);
     }
