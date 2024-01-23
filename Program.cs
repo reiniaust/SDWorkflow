@@ -3,6 +3,10 @@ using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Collections.Generic;
+using MimeKit;
+using MsgReader;
+using System.Security.Cryptography;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 MyClass currentItem;
 MyClass newItem = null;
@@ -20,6 +24,20 @@ string varName = "";
 string varValue = "";
 Dictionary<string, string> paramList = new Dictionary<string, string>();
 
+int weekdayNumber = (int)DateTime.Now.DayOfWeek;
+
+// Wochentage
+Dictionary<int, string> daysOfWeek = new Dictionary<int, string>();
+{
+    daysOfWeek.Add(1, "Montag");
+    daysOfWeek.Add(2, "Dienstag");
+    daysOfWeek.Add(3, "Mittwoch");
+    daysOfWeek.Add(4, "Donnerstag");
+    daysOfWeek.Add(5, "Freitag");
+    daysOfWeek.Add(6, "Samstag");
+    daysOfWeek.Add(0, "Sonntag");
+}
+string weekdayName = daysOfWeek[weekdayNumber];
 
 //HelperClass.SetForeground("Outlook");
 executeCommand("subst s: \"g:\\Meine Ablage\"");
@@ -38,8 +56,66 @@ while (input == "s")
         data.Add(new MyClass() { Id = 1, Name = "SDWorkflow" });
     }
 
+    MyClass dayItem;
+    dayItem = data.Find(item => item.Name == weekdayName);
+    if (dayItem != null)
+    {
+        dayItem.Name = "heute";
+    }
+    dayItem = data.Find(item => item.Name == "heute");
+    if (dayItem != null && dayItem.TimeStamp.AddDays(1).Date == DateTime.Today)
+    {
+        dayItem.Name = "gestern";
+    }
+    saveData();
+
     currentItem = data[0];
-    currentList = data.Where(item => item.ParentId == 1).ToList();
+
+    // E-Mails aus dem Ordner lesen, Punkte anlegen und verschieben
+    {
+        //string downloadFolderPath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + "\\Downloads\\";
+        string downloadFolderPath = filePath;
+        string[] files = Directory.GetFiles(downloadFolderPath, "*.msg");
+        foreach (string file in files)
+        {
+            currentItem = data.Find(item => item.Name == "Vorgänge");
+            var message = new MsgReader.Outlook.Storage.Message(file);
+            setAndSaveNewItem(message.Subject);
+            message.Dispose();
+            string newFolder = filePath + newItem.Id ;
+            Directory.CreateDirectory(newFolder);
+            MyClass emailItem = newItem;
+
+            string newPath = newFolder + "\\" + Path.GetFileName(file);
+            Directory.Move(file, newPath);
+
+            newPath = "\"" + newPath + "\"";
+            currentItem = newItem;
+            setAndSaveNewItem(newPath);
+            executeCommand(newPath);
+
+            Console.WriteLine(message.Subject);
+
+            Console.WriteLine("Termin:");
+            string dateString = Console.ReadLine();
+            MyClass dateItem = data.Find(item => item.Name == dateString);
+            if (dateItem is null)
+            {
+                currentItem = data.Find(item => item.Name == "Termine");
+                setAndSaveNewItem(dateString);
+                dateItem = newItem;
+            }
+            emailItem.DependenceIds.Add(dateItem.Id);
+            Console.WriteLine("der Vorgang wird bearbeitet und bis " + dateString + " ein Feedback gegeben.");
+            Console.ReadKey();
+
+            newItem = null;
+
+        }
+    }
+
+
+    currentList = data.Where(item => item.ParentId == currentItem.Id).ToList();
 
     showList();
 
@@ -60,7 +136,7 @@ void showList()
         Console.Clear();
     }
     catch (System.Exception)
-    {}
+    { }
 
     if (input == "")
     {
@@ -226,15 +302,7 @@ void showList()
             if (newItem is not null)
             {
                 // Text hinzufügen und speichern
-                newItem = new()
-                {
-                    Id = data.Max(item => item.Id) + 1,
-                    Name = input,
-                    ParentId = currentItem.Id,
-                    TimeStamp = DateTime.Now
-                };
-                data.Add(newItem);
-                saveData();
+                setAndSaveNewItem(input);
                 newItem = null;
             }
             else
@@ -447,6 +515,20 @@ void showList()
     }
 }
 
+void setAndSaveNewItem(string name)
+{
+    newItem = new()
+    {
+        Id = data.Max(item => item.Id) + 1,
+        Name = name,
+        ParentId = currentItem.Id,
+        TimeStamp = DateTime.Now
+    };
+    data.Add(newItem);
+    saveData();
+}
+
+
 // Variable/Parameter/Platzhalter lesen
 void setParameter(string itemName)
 {
@@ -525,18 +607,32 @@ void executeCommand(string command)
     //Console.ReadKey();
 }
 
+
 DateTime dateFromWord(string dateString)
 {
     DateTime dateTime = DateTime.Today;
 
-    if (dateString.ToLower() == "heute")
+    dateString = dateString.ToLower();
+    if (dateString == "heute")
     {
         dateTime = DateTime.Today;
     }
-    if (dateString.ToLower() == "morgen")
+    if (dateString == "morgen")
     {
         dateTime = DateTime.Today.AddDays(1);
     }
+
+    int dayNumber = getWeekdayNumber(dateString);
+    if (dayNumber != 0)
+    {
+        int daysAdd = dayNumber - weekdayNumber;
+        if (daysAdd < 0)
+        {
+            daysAdd = daysAdd + 7;   
+        }
+        dateTime = DateTime.Today.AddDays(daysAdd);
+    }
+
     if (dateString.EndsWith("."))
     {
         string format = "d.M.yyyy";
@@ -544,6 +640,19 @@ DateTime dateFromWord(string dateString)
         DateTime.TryParseExact(fullDateString, format, null, System.Globalization.DateTimeStyles.None, out dateTime);
     }
     return dateTime;
+}
+
+int getWeekdayNumber(string dateString)
+{
+    try
+    {
+        var day = daysOfWeek.First(d => d.Value.ToLower() == dateString.ToLower());
+        return day.Key;
+    }
+    catch (Exception)
+    {
+        return 0;
+    }
 }
 
 class MyClass
