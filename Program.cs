@@ -23,6 +23,8 @@ string fileNameToDay = "data" + DateTime.Today.ToString().Split(" ")[0].Replace(
 string varName = "";
 string varValue = "";
 Dictionary<string, string> paramList = new Dictionary<string, string>();
+int searchCounter = 1;
+string lastSearch = "";
 
 int weekdayNumber = (int)DateTime.Now.DayOfWeek;
 
@@ -291,6 +293,17 @@ void showList()
 
     input = Console.ReadLine();
 
+    if (input == "")
+    {
+        input = lastSearch;
+        searchCounter += 1;
+        currentList = data.Where(item => item.ParentId == 1).ToList();
+    }
+    else 
+    {
+        searchCounter = 1;
+    }
+
     if (input != "x" && input != "s")
     {
         if (input == "z" && currentItem.ParentId != 0)
@@ -413,6 +426,7 @@ void showList()
                                                     int number;
                                                     bool isNumber = int.TryParse(input, out number);
                                                     bool found = false;
+                                                    found = false;
                                                     foreach (MyClass item in currentList)
                                                     {
                                                         if (isNumber && number == item.Position || !isNumber && item.Name.ToLower().Contains(input.ToLower()))
@@ -428,7 +442,13 @@ void showList()
                                                         foreach (int id in currentItem.DependenceIds)
                                                         {
                                                             MyClass depItem = data.Find(item => item.Id == id);
-                                                            if (input == depItem.Position.ToString() || depItem.Name.ToLower().Contains(input.ToLower()))
+                                                            if (number == -depItem.Position)
+                                                            {
+                                                                // Abhängigkeit/Verknüpfung löschen, wenn die Nummer mit minus eingegeben wurde
+                                                                currentItem.DependenceIds.Remove(id);
+                                                                break;
+                                                            }
+                                                            if (number == depItem.Position || depItem.Name.ToLower().Contains(input.ToLower()))
                                                             {
                                                                 currentItem = depItem;
                                                                 found = true;
@@ -453,13 +473,14 @@ void showList()
                                                     }
                                                     if (!found)
                                                     {
-                                                        MyClass foundItem = FoundChildItem(currentList, input);
+                                                        int counter = 1;
+                                                        MyClass foundItem = FoundChildItem(currentList, input, counter);
 
                                                         // Neuen Punkt anlegen/hinzufügen
                                                         if (foundItem is not null)
                                                             currentItem = foundItem;
                                                     }
-
+                                                    lastSearch = input;
                                                     input = "";
                                                 }
                                             }
@@ -479,15 +500,19 @@ void showList()
         showList();
     }
 
-    MyClass FoundChildItem(List<MyClass> list, string search)
+    MyClass FoundChildItem(List<MyClass> list, string search, int counter)
     {
         MyClass item = null;
         foreach (MyClass child in list)
         {
             if (child.Name.ToLower().Contains(search.ToLower()))
             {
-                item = child;
-                break;
+                if (counter == searchCounter)
+                {
+                    item = child;
+                    break;
+                }
+                counter += 1;
             }
         }
         if (item is null)
@@ -496,7 +521,7 @@ void showList()
             {
                 if (item is null)
                 {
-                    item = FoundChildItem(data.Where(i => i.ParentId == child.Id).ToList(), search);
+                    item = FoundChildItem(data.Where(i => i.ParentId == child.Id).ToList(), search, counter);
                 }
             }
         }
