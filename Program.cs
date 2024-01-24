@@ -505,7 +505,7 @@ void showList()
         MyClass item = null;
         foreach (MyClass child in list)
         {
-            if (child.Name.ToLower().Contains(search.ToLower()))
+            if (foundAllWordsInItem(child, search))
             {
                 if (counter == searchCounter)
                 {
@@ -528,15 +528,45 @@ void showList()
         return item;
     }
 
-    string Path(MyClass item)
+    string itemPath(MyClass item)
     {
         string path = "";
-        while (item.ParentId != 0)
+        while (item != null && item.ParentId != 0)
         {
-            item = data.FirstOrDefault(i => i.Id == i.ParentId);
-            path += item.Name;
+            item = data.FirstOrDefault(i => i.Id == item.ParentId);
+            if (item != null)
+            {
+                path += item.Name;
+            }
         }
         return path;
+    }
+
+    bool foundAllWordsInItem(MyClass item, string search) {
+        bool found = false;
+        if (item.Name.ToLower().Contains(search.ToLower()))
+        {
+            found = true;
+        }
+        else
+        {
+            foreach (string word in search.Split(" "))
+            {
+                if (item.Name.ToLower().Contains(word.ToLower()))
+                {
+                    found = true;
+                    string path = itemPath(item);
+                    foreach (string nextWord in search.Split(" "))
+                    {
+                        if (nextWord != word && !(item.Name + path).ToLower().Contains(nextWord.ToLower()))
+                        {
+                            found = false;
+                        }
+                    } 
+                }
+            } 
+        }
+        return found;
     }
 }
 
