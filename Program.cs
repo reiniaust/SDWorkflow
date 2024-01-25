@@ -16,8 +16,10 @@ MyClass dependenceItem = null;
 List<MyClass> currentList;
 string json;
 List<MyClass> data;
+List<MyClass> tempData;
 string? input = "s";
-string filePath = @"S:\SDWorkflow\";
+//string filePath = @"S:\SDWorkflow\";
+string filePath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + @"\SDWorkflow\";;
 string fileName = "data.json";
 string fileNameToDay = "data" + DateTime.Today.ToString().Split(" ")[0].Replace(".","") + ".json";
 string varName = "";
@@ -42,7 +44,7 @@ Dictionary<int, string> daysOfWeek = new Dictionary<int, string>();
 string weekdayName = daysOfWeek[weekdayNumber];
 
 //HelperClass.SetForeground("Outlook");
-executeCommand("subst s: \"g:\\Meine Ablage\"");
+//executeCommand("subst s: \"g:\\Meine Ablage\"");
 
 
 while (input == "s")
@@ -51,11 +53,30 @@ while (input == "s")
     {
         json = File.ReadAllText(filePath + fileName);
         data = JsonConvert.DeserializeObject<List<MyClass>>(json);
+        foreach (var item in data)
+        {
+            item.File = "";
+        }
     }
     catch (System.Exception)
     {
         data = new();
         data.Add(new MyClass() { Id = 1, Name = "SDWorkflow" });
+    }
+
+    tempData = new();
+    foreach (var file in data.Where(i => i.ParentId == 1 && i.Name.EndsWith(".json")))
+    {
+        json = File.ReadAllText(file.Name);
+        foreach (var item in JsonConvert.DeserializeObject<List<MyClass>>(json))
+        {
+            item.File = file.Name;
+            tempData.Add(item);
+        }
+    }
+    foreach (var item in tempData)
+    {
+        data.Add(item);
     }
 
     MyClass dayItem;
@@ -76,8 +97,7 @@ while (input == "s")
     // E-Mails aus dem Ordner lesen, Punkte anlegen und verschieben
     {
         //string downloadFolderPath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + "\\Downloads\\";
-        string downloadFolderPath = filePath;
-        string[] files = Directory.GetFiles(downloadFolderPath, "*.msg");
+        string[] files = Directory.GetFiles(filePath, "*.msg");
         foreach (string file in files)
         {
             currentItem = data.Find(item => item.Name == "Vorgänge");
@@ -117,7 +137,7 @@ while (input == "s")
     }
 
 
-    currentList = data.Where(item => item.ParentId == currentItem.Id).ToList();
+    currentList = data.Where(item => item.ParentId == currentItem.Id && item.File == "").ToList();
 
     showList();
 
@@ -126,9 +146,16 @@ while (input == "s")
 
 void saveData()
 {
-    json = JsonConvert.SerializeObject(data, Formatting.Indented);
+    json = JsonConvert.SerializeObject(data.Where(item => item.File == "").ToList(), Formatting.Indented);
     File.WriteAllText(filePath + fileName, json);
     File.WriteAllText(filePath + fileNameToDay, json);
+
+    foreach (var file in data.Where(i => i.ParentId == 1 && i.Name.EndsWith(".json")))
+    {
+        json = JsonConvert.SerializeObject(data.Where(item => item.File == file.Name).ToList(), Formatting.Indented);
+        File.WriteAllText(file.Name, json);
+        File.WriteAllText(file.Name + fileNameToDay, json);
+    }
 }
 
 void showList()
@@ -297,7 +324,7 @@ void showList()
     {
         input = lastSearch;
         searchCounter += 1;
-        currentList = data.Where(item => item.ParentId == 1).ToList();
+        currentList = data.Where(item => item.ParentId == 1 && item.File == "").ToList();
     }
     else 
     {
@@ -495,7 +522,7 @@ void showList()
         }
         if (currentItem != null)
         {
-            currentList = data.Where(item => item.ParentId == currentItem.Id).ToList();
+            currentList = data.Where(item => item.ParentId == currentItem.Id && item.File == currentItem.File || item.File == currentItem.Name && item.ParentId ==1).ToList();
         }
         showList();
     }
@@ -575,6 +602,7 @@ void setAndSaveNewItem(string name)
     newItem = new()
     {
         Id = data.Max(item => item.Id) + 1,
+        File = currentItem.File,
         Name = name,
         ParentId = currentItem.Id,
         TimeStamp = DateTime.Now
@@ -713,6 +741,7 @@ int getWeekdayNumber(string dateString)
 class MyClass
 {
     public int Id { get; set; }
+    public string File { get; set; } = "";
     public string Name { get; set; } = "";
     public int ParentId { get; set; }
     public int Position { get; set; }
