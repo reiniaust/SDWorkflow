@@ -19,9 +19,9 @@ List<MyClass> data;
 List<MyClass> tempData;
 string? input = "s";
 //string filePath = @"S:\SDWorkflow\";
-string filePath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + @"\SDWorkflow\";;
+string filePath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + @"\SDWorkflow\"; ;
 string fileName = "data.json";
-string fileNameToDay = "data" + DateTime.Today.ToString().Split(" ")[0].Replace(".","") + ".json";
+string fileNameToDay = "data" + DateTime.Today.ToString().Split(" ")[0].Replace(".", "") + ".json";
 string varName = "";
 string varValue = "";
 Dictionary<string, string> paramList = new Dictionary<string, string>();
@@ -79,18 +79,39 @@ while (input == "s")
         data.Add(item);
     }
 
+    // Termin-Worte ändern
     MyClass dayItem;
     dayItem = data.Find(item => item.Name == weekdayName);
     if (dayItem != null)
     {
         dayItem.Name = "heute";
+        dayItem.TimeStamp = DateTime.Now;
     }
-    dayItem = data.Find(item => item.Name == "heute");
-    if (dayItem != null && dayItem.TimeStamp.AddDays(1).Date == DateTime.Today)
+    // morgigen Wochentag auf "morgen" ändern
+    dayItem = data.Find(item => item.Name == daysOfWeek[weekdayNumber + 1]);
+    if (dayItem != null)
+    {
+        dayItem.Name = "morgen";
+        dayItem.TimeStamp = DateTime.Now;
+    }
+    // dann "heute" auf "gestern"
+    dayItem = data.Find(item => item.Name == "heute" && item.TimeStamp.AddDays(1).Date == DateTime.Today);
+    if (dayItem != null)
     {
         dayItem.Name = "gestern";
+        dayItem.TimeStamp = DateTime.Now;
     }
-    saveData();
+    // dann "morgen" auf "heute"
+    dayItem = data.Find(item => item.Name == "morgen" && item.TimeStamp.AddDays(1).Date == DateTime.Today);
+    if (dayItem != null)
+    {
+        dayItem.Name = "heute";
+        dayItem.TimeStamp = DateTime.Now;
+    }
+    if (dayItem != null && dayItem.TimeStamp == DateTime.Now)
+    {
+        saveData();
+    }
 
     currentItem = data[0];
 
@@ -104,7 +125,7 @@ while (input == "s")
             var message = new MsgReader.Outlook.Storage.Message(file);
             setAndSaveNewItem(message.Subject);
             message.Dispose();
-            string newFolder = filePath + newItem.Id ;
+            string newFolder = filePath + newItem.Id;
             Directory.CreateDirectory(newFolder);
             MyClass emailItem = newItem;
 
@@ -316,7 +337,7 @@ void showList()
     {
         // Ändern
         Console.WriteLine("Neuer Titel:");
-    } 
+    }
 
     input = Console.ReadLine();
 
@@ -326,7 +347,7 @@ void showList()
         searchCounter += 1;
         currentList = data.Where(item => item.ParentId == 1 && item.File == "").ToList();
     }
-    else 
+    else
     {
         searchCounter = 1;
     }
@@ -375,7 +396,7 @@ void showList()
                             {
                                 dependenceItem = data.Find(item => item.Id == dependenceItem.Id);
                                 dependenceItem.DependenceIds.Add(currentItem.Id);
-                                currentItem= dependenceItem;
+                                currentItem = dependenceItem;
                                 saveData();
                                 dependenceItem = null;
                             }
@@ -522,7 +543,7 @@ void showList()
         }
         if (currentItem != null)
         {
-            currentList = data.Where(item => item.ParentId == currentItem.Id && item.File == currentItem.File || item.File == currentItem.Name && item.ParentId ==1).ToList();
+            currentList = data.Where(item => item.ParentId == currentItem.Id && item.File == currentItem.File || item.File == currentItem.Name && item.ParentId == 1).ToList();
         }
         showList();
     }
@@ -569,7 +590,8 @@ void showList()
         return path;
     }
 
-    bool foundAllWordsInItem(MyClass item, string search) {
+    bool foundAllWordsInItem(MyClass item, string search)
+    {
         bool found = false;
         if (item.Name.ToLower().Contains(search.ToLower()))
         {
@@ -589,9 +611,9 @@ void showList()
                         {
                             found = false;
                         }
-                    } 
+                    }
                 }
-            } 
+            }
         }
         return found;
     }
@@ -711,7 +733,7 @@ DateTime dateFromWord(string dateString)
         int daysAdd = dayNumber - weekdayNumber;
         if (daysAdd < 0)
         {
-            daysAdd = daysAdd + 7;   
+            daysAdd = daysAdd + 7;
         }
         dateTime = DateTime.Today.AddDays(daysAdd);
     }
