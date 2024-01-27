@@ -15,8 +15,8 @@ MyClass cutItem = null;
 MyClass dependenceItem = null;
 List<MyClass> currentList;
 string json;
-List<MyClass> data;
-List<MyClass> tempData;
+List<MyClass> data = new();
+List<MyClass> tempData = new();
 string? input = "s";
 //string filePath[0] = @"S:\SDWorkflow\";
 List<string> filePath = new();
@@ -54,6 +54,10 @@ while (input == "s")
     // Daten lesen        
     try
     {
+        if (data.Count == 0)
+        {
+            executeCommand(Path.GetDirectoryName(filePath[0]));
+        }
         json = File.ReadAllText(filePath[0]);
         data = JsonConvert.DeserializeObject<List<MyClass>>(json);
         foreach (var item in data)
@@ -93,7 +97,9 @@ while (input == "s")
         dayItem.TimeStamp = DateTime.Now;
     }
     // morgigen Wochentag auf "morgen" ändern
-    dayItem = data.Find(item => item.Name == daysOfWeek[weekdayNumber + 1]);
+    int nextDayNumber = weekdayNumber + 1;
+    if(nextDayNumber == 7) nextDayNumber = 0;
+    dayItem = data.Find(item => item.Name == daysOfWeek[nextDayNumber]);
     if (dayItem != null)
     {
         dayItem.Name = "morgen";
@@ -157,7 +163,26 @@ while (input == "s")
                 dateItem = newItem;
             }
             emailItem.DependenceIds.Add(dateItem.Id);
-            Console.WriteLine("der Vorgang wird bearbeitet und bis " + dateString + " ein Feedback gegeben.");
+
+            currentItem = data.Find(item => item.Name == "Kollegen");
+            if (currentItem != null)
+            {
+                Console.WriteLine("Zuständiger Kollege?");
+                string responsible = Console.ReadLine();
+                if (responsible != "")
+                {
+                    MyClass colleaguesItem = data.Find(item => item.Name.ToLower().Contains(responsible.ToLower()));
+                    if (colleaguesItem is null)
+                    {
+                        setAndSaveNewItem(responsible);
+                        colleaguesItem = newItem;
+                    }
+                    emailItem.DependenceIds.Add(colleaguesItem.Id);
+                    Console.WriteLine("Weiterleitung an " + responsible + ": bitte kümmere dich bis " + dateString + " darum und gib mir dann ein Feedback.");
+                }
+            }
+
+            Console.WriteLine("Antwort an Kunden: wir kümmern uns darum und geben bis " + dateString + " ein Feedback.");
             Console.ReadKey();
 
             newItem = null;
