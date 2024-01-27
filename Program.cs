@@ -18,10 +18,11 @@ string json;
 List<MyClass> data;
 List<MyClass> tempData;
 string? input = "s";
-//string filePath = @"S:\SDWorkflow\";
-string filePath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + @"\SDWorkflow\"; ;
-string fileName = "data.json";
-string fileNameToDay = "data" + DateTime.Today.ToString().Split(" ")[0].Replace(".", "") + ".json";
+//string filePath[0] = @"S:\SDWorkflow\";
+List<string> filePath = new();
+filePath.Add(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + @"\SDWorkflow\data.json");
+//string fileName = "data.json";
+string fileNameToDay = DateTime.Today.ToString().Split(" ")[0].Replace(".", "");
 string varName = "";
 string varValue = "";
 Dictionary<string, string> paramList = new Dictionary<string, string>();
@@ -49,9 +50,11 @@ string weekdayName = daysOfWeek[weekdayNumber];
 
 while (input == "s")
 {
+    
+    // Daten lesen        
     try
     {
-        json = File.ReadAllText(filePath + fileName);
+        json = File.ReadAllText(filePath[0]);
         data = JsonConvert.DeserializeObject<List<MyClass>>(json);
         foreach (var item in data)
         {
@@ -63,10 +66,11 @@ while (input == "s")
         data = new();
         data.Add(new MyClass() { Id = 1, Name = "SDWorkflow" });
     }
-
     tempData = new();
     foreach (var file in data.Where(i => i.ParentId == 1 && i.Name.EndsWith(".json")))
     {
+        filePath.Add(file.Name);
+
         json = File.ReadAllText(file.Name);
         foreach (var item in JsonConvert.DeserializeObject<List<MyClass>>(json))
         {
@@ -78,6 +82,7 @@ while (input == "s")
     {
         data.Add(item);
     }
+
 
     // Termin-Worte ändern
     MyClass dayItem;
@@ -116,16 +121,19 @@ while (input == "s")
     currentItem = data[0];
 
     // E-Mails aus dem Ordner lesen, Punkte anlegen und verschieben
+    foreach (var item in filePath)
     {
+        string path = Path.GetDirectoryName(item) + "\\";
+
         //string downloadFolderPath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + "\\Downloads\\";
-        string[] files = Directory.GetFiles(filePath, "*.msg");
+        string[] files = Directory.GetFiles(path, "*.msg");
         foreach (string file in files)
         {
             currentItem = data.Find(item => item.Name == "Vorgänge");
             var message = new MsgReader.Outlook.Storage.Message(file);
             setAndSaveNewItem(message.Subject);
             message.Dispose();
-            string newFolder = filePath + newItem.Id;
+            string newFolder = path + newItem.Id;
             Directory.CreateDirectory(newFolder);
             MyClass emailItem = newItem;
 
@@ -168,8 +176,8 @@ while (input == "s")
 void saveData()
 {
     json = JsonConvert.SerializeObject(data.Where(item => item.File == "").ToList(), Formatting.Indented);
-    File.WriteAllText(filePath + fileName, json);
-    File.WriteAllText(filePath + fileNameToDay, json);
+    File.WriteAllText(filePath[0], json);
+    File.WriteAllText(filePath[0] + fileNameToDay, json);
 
     foreach (var file in data.Where(i => i.ParentId == 1 && i.Name.EndsWith(".json")))
     {
@@ -221,7 +229,7 @@ void showList()
             string plus = "";
             i += 1;
             item.Position = i;
-            if (data.Where(child => child.ParentId == item.Id).ToList().Count > 0 || item.DependenceIds.Count > 0)
+            if (data.Where(child => matchList(child, item)).ToList().Count > 0 || item.DependenceIds.Count > 0)
             {
                 plus = " +";
             }
@@ -356,7 +364,7 @@ void showList()
     {
         if (input == "z" && currentItem.ParentId != 0)
         {
-            currentItem = data.Find(item => item.Id == currentItem.ParentId);
+            currentItem = data.Find(item => item.Id == currentItem.ParentId && item.File == currentItem.File);
         }
         else
         {
@@ -416,7 +424,7 @@ void showList()
                                     if (cutItem is null)
                                     {
                                         cutItem = currentItem;
-                                        currentItem = data.Find(item => item.Id == currentItem.ParentId);
+                                        currentItem = data.Find(item => item.Id == currentItem.ParentId && item.File == currentItem.File);
                                         cutItem.ParentId = 0;
                                     }
                                     else
@@ -435,7 +443,7 @@ void showList()
                                         // Löschen
                                         data.Remove(currentItem);
                                         saveData();
-                                        currentItem = data.Find(item => item.Id == currentItem.ParentId);
+                                        currentItem = data.Find(item => item.Id == currentItem.ParentId && item.File == currentItem.File);
                                     }
                                     else
                                     {
@@ -467,7 +475,7 @@ void showList()
                                                     setParameter(currentItem.Name);
                                                     saveData();
                                                     // eine Ebene zurückgehen
-                                                    currentItem = data.Find(item => item.Id == currentItem.ParentId);
+                                                    currentItem = data.Find(item => item.Id == currentItem.ParentId && item.File == currentItem.File);
                                                 }
                                                 else
                                                 {
@@ -519,12 +527,13 @@ void showList()
                                                             }
                                                         }
                                                     }
+
                                                     if (!found)
                                                     {
+                                                        // in allen Daten suchen
                                                         int counter = 1;
                                                         MyClass foundItem = FoundChildItem(currentList, input, counter);
 
-                                                        // Neuen Punkt anlegen/hinzufügen
                                                         if (foundItem is not null)
                                                             currentItem = foundItem;
                                                     }
@@ -543,17 +552,25 @@ void showList()
         }
         if (currentItem != null)
         {
-            currentList = data.Where(item => item.ParentId == currentItem.Id && item.File == currentItem.File || item.File == currentItem.Name && item.ParentId == 1).ToList();
+            currentList = data.Where(item => matchList(item, currentItem)).ToList();
         }
         showList();
     }
 
+    // die passenden Unterpunkte zuordnen (je nach Joson-Datei)
+    bool matchList(MyClass item, MyClass parentItem)
+    {
+        return item.ParentId == parentItem.Id && item.File == parentItem.File || item.File == parentItem.Name && item.ParentId == 1;
+    }
+
+
+    // Suche im ganzen Baum 
     MyClass FoundChildItem(List<MyClass> list, string search, int counter)
     {
         MyClass item = null;
         foreach (MyClass child in list)
         {
-            if (foundAllWordsInItem(child, search))
+            if (foundAllWordsInItem(child, search)) // nach mehr als einem Wort suchen
             {
                 if (counter == searchCounter)
                 {
@@ -569,7 +586,7 @@ void showList()
             {
                 if (item is null)
                 {
-                    item = FoundChildItem(data.Where(i => i.ParentId == child.Id).ToList(), search, counter);
+                    item = FoundChildItem(data.Where(i => matchList(i, child)).ToList(), search, counter);
                 }
             }
         }
@@ -581,7 +598,7 @@ void showList()
         string path = "";
         while (item != null && item.ParentId != 0)
         {
-            item = data.FirstOrDefault(i => i.Id == item.ParentId);
+            item = data.FirstOrDefault(i => i.Id ==item.ParentId && i.File == item.File);
             if (item != null)
             {
                 path += item.Name;
@@ -677,8 +694,9 @@ void setVariableOrExecuteCommand(string itemName)
 
         executeCommand(cmd);
     }
-    if (itemName.Contains(@":\"))
+    if (itemName.Contains(@":\") && !itemName.Contains(@".json"))
     {
+        // Datei öffnen
         executeCommand(itemName);
     }
 }
