@@ -185,6 +185,7 @@ while (input == "s")
             Console.WriteLine("Antwort an Kunden: wir kümmern uns darum und geben bis " + dateString + " ein Feedback.");
             Console.ReadKey();
 
+            currentItem = emailItem;
             newItem = null;
 
         }
