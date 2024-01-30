@@ -63,6 +63,7 @@ while (input == "s")
         foreach (var item in data)
         {
             item.File = "";
+            item.Position = 0;
         }
     }
     catch (System.Exception)
@@ -80,6 +81,7 @@ while (input == "s")
         {
             item.File = file.Name;
             tempData.Add(item);
+            item.Position = 0;
         }
     }
     foreach (var item in tempData)
@@ -89,39 +91,41 @@ while (input == "s")
 
 
     // Termin-Worte ändern
-    MyClass dayItem;
-    dayItem = data.Find(item => item.Name == weekdayName);
-    if (dayItem != null)
     {
-        dayItem.Name = "heute";
-        dayItem.TimeStamp = DateTime.Now;
-    }
-    // morgigen Wochentag auf "morgen" ändern
-    int nextDayNumber = weekdayNumber + 1;
-    if(nextDayNumber == 7) nextDayNumber = 0;
-    dayItem = data.Find(item => item.Name == daysOfWeek[nextDayNumber]);
-    if (dayItem != null)
-    {
-        dayItem.Name = "morgen";
-        dayItem.TimeStamp = DateTime.Now;
-    }
-    // dann "heute" auf "gestern"
-    dayItem = data.Find(item => item.Name == "heute" && item.TimeStamp.AddDays(1).Date == DateTime.Today);
-    if (dayItem != null)
-    {
-        dayItem.Name = "gestern";
-        dayItem.TimeStamp = DateTime.Now;
-    }
-    // dann "morgen" auf "heute"
-    dayItem = data.Find(item => item.Name == "morgen" && item.TimeStamp.AddDays(1).Date == DateTime.Today);
-    if (dayItem != null)
-    {
-        dayItem.Name = "heute";
-        dayItem.TimeStamp = DateTime.Now;
-    }
-    if (dayItem != null && dayItem.TimeStamp == DateTime.Now)
-    {
-        saveData();
+        MyClass dayItem;
+        dayItem = data.Find(item => item.Name == weekdayName);
+        if (dayItem != null)
+        {
+            dayItem.Name = "heute";
+            dayItem.TimeStamp = DateTime.Now;
+        }
+        // morgigen Wochentag auf "morgen" ändern
+        int nextDayNumber = weekdayNumber + 1;
+        if(nextDayNumber == 7) nextDayNumber = 0;
+        dayItem = data.Find(item => item.Name == daysOfWeek[nextDayNumber]);
+        if (dayItem != null)
+        {
+            dayItem.Name = "morgen";
+            dayItem.TimeStamp = DateTime.Now;
+        }
+        // dann "heute" auf "gestern"
+        dayItem = data.Find(item => item.Name == "heute" && item.TimeStamp.AddDays(1).Date == DateTime.Today);
+        if (dayItem != null)
+        {
+            dayItem.Name = "gestern";
+            dayItem.TimeStamp = DateTime.Now;
+        }
+        // dann "morgen" auf "heute"
+        dayItem = data.Find(item => item.Name == "morgen" && item.TimeStamp.AddDays(1).Date == DateTime.Today);
+        if (dayItem != null)
+        {
+            dayItem.Name = "heute";
+            dayItem.TimeStamp = DateTime.Now;
+        }
+        if (dayItem != null && dayItem.TimeStamp == DateTime.Now)
+        {
+            saveData();
+        }
     }
 
     currentItem = data[0];
@@ -524,17 +528,20 @@ void showList()
                                                         foreach (int id in currentItem.DependenceIds)
                                                         {
                                                             MyClass depItem = data.Find(item => item.Id == id);
-                                                            if (number == -depItem.Position)
+                                                            if (depItem != null)
                                                             {
-                                                                // Abhängigkeit/Verknüpfung löschen, wenn die Nummer mit minus eingegeben wurde
-                                                                currentItem.DependenceIds.Remove(id);
-                                                                break;
-                                                            }
-                                                            if (number == depItem.Position || depItem.Name.ToLower().Contains(input.ToLower()))
-                                                            {
-                                                                currentItem = depItem;
-                                                                found = true;
-                                                                break;
+                                                                if (number == -depItem.Position)
+                                                                {
+                                                                    // Abhängigkeit/Verknüpfung löschen, wenn die Nummer mit minus eingegeben wurde
+                                                                    currentItem.DependenceIds.Remove(id);
+                                                                    break;
+                                                                }
+                                                                if (number == depItem.Position || depItem.Name.ToLower().Contains(input.ToLower()))
+                                                                {
+                                                                    currentItem = depItem;
+                                                                    found = true;
+                                                                    break;
+                                                                }
                                                             }
                                                         }
                                                     }
@@ -636,7 +643,7 @@ void showList()
     bool foundAllWordsInItem(MyClass item, string search)
     {
         bool found = false;
-        if (item.Name.ToLower().Contains(search.ToLower()))
+        if (isSynonymInText(item.Name, search))
         {
             found = true;
         }
@@ -644,19 +651,48 @@ void showList()
         {
             foreach (string word in search.Split(" "))
             {
-                if (item.Name.ToLower().Contains(word.ToLower()))
+                if (isSynonymInText(item.Name, word))
                 {
                     found = true;
                     string path = itemPath(item);
                     foreach (string nextWord in search.Split(" "))
                     {
-                        if (nextWord != word && !(item.Name + path).ToLower().Contains(nextWord.ToLower()))
+                        if (nextWord != word && !isSynonymInText(item.Name + path, nextWord))
                         {
                             found = false;
                         }
                     }
                 }
             }
+        }
+        return found;
+    }
+
+    bool isSynonymInText(string text, string word) 
+    {
+        bool found = false;
+        if (text.ToLower().Contains(word.ToLower()))
+        {
+            found = true;
+        }
+        else 
+        {
+            MyClass synItem = data.Find(item => item.Name == "Synonyme");
+            if (synItem != null)
+            {
+                synItem = data.Find(item => item.Name.Contains(word) && item.ParentId == synItem.Id);
+                if (synItem != null)
+                {
+                    foreach (var synWord in synItem.Name.Split(","))
+                    {
+                        if (text.ToLower().Contains(synWord.ToLower()))
+                        {
+                            found = true;
+                        }
+                    }
+                }
+            }
+
         }
         return found;
     }
