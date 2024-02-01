@@ -50,7 +50,7 @@ string weekdayName = daysOfWeek[weekdayNumber];
 
 while (input == "s")
 {
-    
+
     // Daten lesen        
     try
     {
@@ -62,8 +62,7 @@ while (input == "s")
         data = JsonConvert.DeserializeObject<List<MyClass>>(json);
         foreach (var item in data)
         {
-            item.File = "";
-            item.Position = 0;
+            item.File = filePath[0];
         }
     }
     catch (System.Exception)
@@ -81,7 +80,6 @@ while (input == "s")
         {
             item.File = file.Name;
             tempData.Add(item);
-            item.Position = 0;
         }
     }
     foreach (var item in tempData)
@@ -92,39 +90,34 @@ while (input == "s")
 
     // Termin-Worte ändern
     {
-        MyClass dayItem;
-        dayItem = data.Find(item => item.Name == weekdayName);
-        if (dayItem != null)
+        currentItem = data.Find(item => item.Name == weekdayName);
+        if (currentItem != null)
         {
-            dayItem.Name = "heute";
-            dayItem.TimeStamp = DateTime.Now;
+            currentItem.Name = "heute";
+            saveDataItem();
         }
         // morgigen Wochentag auf "morgen" ändern
         int nextDayNumber = weekdayNumber + 1;
-        if(nextDayNumber == 7) nextDayNumber = 0;
-        dayItem = data.Find(item => item.Name == daysOfWeek[nextDayNumber]);
-        if (dayItem != null)
+        if (nextDayNumber == 7) nextDayNumber = 0;
+        currentItem = data.Find(item => item.Name == daysOfWeek[nextDayNumber]);
+        if (currentItem != null)
         {
-            dayItem.Name = "morgen";
-            dayItem.TimeStamp = DateTime.Now;
+            currentItem.Name = "morgen";
+            saveDataItem();
         }
         // dann "heute" auf "gestern"
-        dayItem = data.Find(item => item.Name == "heute" && item.TimeStamp.AddDays(1).Date == DateTime.Today);
-        if (dayItem != null)
+        currentItem = data.Find(item => item.Name == "heute" && item.TimeStamp.AddDays(1).Date == DateTime.Today);
+        if (currentItem != null)
         {
-            dayItem.Name = "gestern";
-            dayItem.TimeStamp = DateTime.Now;
+            currentItem.Name = "gestern";
+            saveDataItem();
         }
         // dann "morgen" auf "heute"
-        dayItem = data.Find(item => item.Name == "morgen" && item.TimeStamp.AddDays(1).Date == DateTime.Today);
-        if (dayItem != null)
+        currentItem = data.Find(item => item.Name == "morgen" && item.TimeStamp.AddDays(1).Date == DateTime.Today);
+        if (currentItem != null)
         {
-            dayItem.Name = "heute";
-            dayItem.TimeStamp = DateTime.Now;
-        }
-        if (dayItem != null && dayItem.TimeStamp == DateTime.Now)
-        {
-            saveData();
+            currentItem.Name = "heute";
+            saveDataItem();
         }
     }
 
@@ -196,16 +189,17 @@ while (input == "s")
     }
 
 
-    currentList = data.Where(item => item.ParentId == currentItem.Id && item.File == "").ToList();
+    currentList = data.Where(item => item.ParentId == currentItem.Id && item.File == filePath[0]).ToList();
 
     showList();
 
-    saveData();
+    //saveData();
 }
 
+/*
 void saveData()
 {
-    json = JsonConvert.SerializeObject(data.Where(item => item.File == "").ToList(), Formatting.Indented);
+    json = JsonConvert.SerializeObject(data.Where(item => item.File == filePath[0]).ToList(), Formatting.Indented);
     File.WriteAllText(filePath[0], json);
     File.WriteAllText(filePath[0] + fileNameToDay, json);
 
@@ -216,6 +210,50 @@ void saveData()
         File.WriteAllText(file.Name + fileNameToDay, json);
     }
 }
+*/
+
+void saveDataItem()
+{
+    MyClass item = new();
+    json = File.ReadAllText(currentItem.File);
+    tempData = JsonConvert.DeserializeObject<List<MyClass>>(json);
+    if (newItem != null)
+    {
+        tempData.Add(newItem);
+    }
+    if (modifyItem != null)
+    {
+        item = tempData.Find(i => i.Id == modifyItem.Id);
+        item.Name = modifyItem.Name;
+        item.TimeStamp = DateTime.Now;
+    }
+    if (cutItem != null)
+    {
+        item = tempData.Find(i => i.Id == cutItem.Id);
+        item.ParentId = currentItem.Id;
+        item.TimeStamp = DateTime.Now;
+    }
+    if (data.Find(i => i.Id == currentItem.Id) == null)
+    {
+        // Löschen
+        item = tempData.Find(i => i.Id == currentItem.Id);
+        tempData.Remove(item);
+    }
+    if (item.Id == 0)
+    {
+        item = tempData.Find(i => i.Id == currentItem.Id);
+        item.Name = currentItem.Name;   
+        // Erledigt setzen
+        item.Done = currentItem.Done;
+        // Abhängigkeiten speichern
+        item.DependenceIds = currentItem.DependenceIds; 
+    }
+
+    json = JsonConvert.SerializeObject(tempData.ToList(), Formatting.Indented);
+    File.WriteAllText(currentItem.File, json);
+    File.WriteAllText(currentItem.File + fileNameToDay, json);
+}
+
 
 void showList()
 {
@@ -234,6 +272,11 @@ void showList()
 
     // Daten anzeigen
     {
+        foreach (var item in data)
+        {
+            item.Position = 0;
+        }
+
         string done = "";
         if (currentItem.Done)
         {
@@ -383,7 +426,7 @@ void showList()
     {
         input = lastSearch;
         searchCounter += 1;
-        currentList = data.Where(item => item.ParentId == 1 && item.File == "").ToList();
+        currentList = data.Where(item => item.ParentId == 1 && item.File == filePath[0]).ToList();
     }
     else
     {
@@ -411,7 +454,7 @@ void showList()
                 {
                     // Änderung speichern
                     modifyItem.Name = input;
-                    saveData();
+                    saveDataItem();
                     modifyItem = null;
                 }
                 else
@@ -435,7 +478,7 @@ void showList()
                                 dependenceItem = data.Find(item => item.Id == dependenceItem.Id);
                                 dependenceItem.DependenceIds.Add(currentItem.Id);
                                 currentItem = dependenceItem;
-                                saveData();
+                                saveDataItem();
                                 dependenceItem = null;
                             }
                         }
@@ -460,9 +503,7 @@ void showList()
                                     else
                                     {
                                         // Ausgeschnittenen Punkt einfügen
-                                        cutItem.ParentId = currentItem.Id;
-                                        cutItem.TimeStamp = DateTime.Now;
-                                        saveData();
+                                        saveDataItem();
                                         cutItem = null;
                                     }
                                 }
@@ -472,7 +513,7 @@ void showList()
                                     {
                                         // Löschen
                                         data.Remove(currentItem);
-                                        saveData();
+                                        saveDataItem();
                                         currentItem = data.Find(item => item.Id == currentItem.ParentId && item.File == currentItem.File);
                                     }
                                     else
@@ -481,8 +522,7 @@ void showList()
                                         {
                                             // Erledigt/Unerledigt
                                             currentItem.Done = !currentItem.Done;
-                                            currentItem.TimeStamp = DateTime.Now;
-                                            saveData();
+                                            saveDataItem();
                                         }
                                         else
                                         {
@@ -503,7 +543,7 @@ void showList()
                                                     // Parameter setzen (z.B. [Faelligkeit]=morgen)
                                                     currentItem.Name = currentItem.Name.Split('=')[0] + "=" + input;
                                                     setParameter(currentItem.Name);
-                                                    saveData();
+                                                    saveDataItem();
                                                     // eine Ebene zurückgehen
                                                     currentItem = data.Find(item => item.Id == currentItem.ParentId && item.File == currentItem.File);
                                                 }
@@ -551,7 +591,7 @@ void showList()
                                                         {
                                                             if (item.DependenceIds.Contains(currentItem.Id))
                                                             {
-                                                                if (input == item.Position.ToString() || item.Name.ToLower().Contains(input.ToLower()))
+                                                                if (input == item.Position.ToString())
                                                                 {
                                                                     currentItem = item;
                                                                     found = true;
@@ -631,7 +671,7 @@ void showList()
         string path = "";
         while (item != null && item.ParentId != 0)
         {
-            item = data.FirstOrDefault(i => i.Id ==item.ParentId && i.File == item.File);
+            item = data.FirstOrDefault(i => i.Id == item.ParentId && i.File == item.File);
             if (item != null)
             {
                 path += item.Name;
@@ -668,14 +708,14 @@ void showList()
         return found;
     }
 
-    bool isSynonymInText(string text, string word) 
+    bool isSynonymInText(string text, string word)
     {
         bool found = false;
         if (text.ToLower().Contains(word.ToLower()))
         {
             found = true;
         }
-        else 
+        else
         {
             MyClass synItem = data.Find(item => item.Name == "Synonyme");
             if (synItem != null)
@@ -709,7 +749,7 @@ void setAndSaveNewItem(string name)
         TimeStamp = DateTime.Now
     };
     data.Add(newItem);
-    saveData();
+    saveDataItem();
 }
 
 
