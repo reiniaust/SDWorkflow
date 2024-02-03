@@ -17,7 +17,7 @@ List<MyClass> currentList;
 string json;
 List<MyClass> data = new();
 List<MyClass> tempData = new();
-string? input = "s";
+string? input = "";
 //string filePath[0] = @"S:\SDWorkflow\";
 List<string> filePath = new();
 filePath.Add(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + @"\SDWorkflow\data.json");
@@ -26,8 +26,8 @@ string fileNameToDay = DateTime.Today.ToString().Split(" ")[0].Replace(".", "");
 string varName = "";
 string varValue = "";
 Dictionary<string, string> paramList = new Dictionary<string, string>();
-int searchCounter = 1;
-string lastSearch = "";
+int searchCounter;
+string lastSearch;
 
 int weekdayNumber = (int)DateTime.Now.DayOfWeek;
 
@@ -48,8 +48,11 @@ string weekdayName = daysOfWeek[weekdayNumber];
 //executeCommand("subst s: \"g:\\Meine Ablage\"");
 
 
-while (input == "s")
+while (input == "s" || input == "")
 {
+
+    searchCounter = 1;
+    lastSearch = "";
 
     // Daten lesen        
     try
@@ -121,7 +124,12 @@ while (input == "s")
         }
     }
 
-    currentItem = data[0];
+    currentItem = data[0]; // wenn man Startseite gewählt hat
+    data = data.OrderByDescending(item => item.TimeStamp).ToList();
+    if (input == "")
+    {
+        currentItem = searchItem("");
+    }
 
     // E-Mails aus dem Ordner lesen, Punkte anlegen und verschieben
     foreach (var item in filePath)
@@ -195,22 +203,6 @@ while (input == "s")
 
     //saveData();
 }
-
-/*
-void saveData()
-{
-    json = JsonConvert.SerializeObject(data.Where(item => item.File == filePath[0]).ToList(), Formatting.Indented);
-    File.WriteAllText(filePath[0], json);
-    File.WriteAllText(filePath[0] + fileNameToDay, json);
-
-    foreach (var file in data.Where(i => i.ParentId == 1 && i.Name.EndsWith(".json")))
-    {
-        json = JsonConvert.SerializeObject(data.Where(item => item.File == file.Name).ToList(), Formatting.Indented);
-        File.WriteAllText(file.Name, json);
-        File.WriteAllText(file.Name + fileNameToDay, json);
-    }
-}
-*/
 
 void saveDataItem()
 {
@@ -555,7 +547,7 @@ void showList()
                                                     found = false;
                                                     foreach (MyClass item in currentList)
                                                     {
-                                                        if (isNumber && number == item.Position || !isNumber && item.Name.ToLower().Contains(input.ToLower()))
+                                                        if (isNumber && number == item.Position || input != "" && !isNumber && item.Name.ToLower().Contains(input.ToLower()))
                                                         {
                                                             currentItem = item;
                                                             found = true;
@@ -604,8 +596,7 @@ void showList()
                                                     if (!found)
                                                     {
                                                         // in allen Daten suchen
-                                                        int counter = 1;
-                                                        MyClass foundItem = FoundChildItem(currentList, input, counter);
+                                                        MyClass foundItem = searchItem(input);
 
                                                         if (foundItem is not null)
                                                             currentItem = foundItem;
@@ -630,112 +621,103 @@ void showList()
         showList();
     }
 
-    // die passenden Unterpunkte zuordnen (je nach Joson-Datei)
-    bool matchList(MyClass item, MyClass parentItem)
-    {
-        return item.ParentId == parentItem.Id && item.File == parentItem.File || item.File == parentItem.Name && item.ParentId == 1;
-    }
+}
+
+// die passenden Unterpunkte zuordnen (je nach Joson-Datei)
+bool matchList(MyClass item, MyClass parentItem)
+{
+    return item.ParentId == parentItem.Id && item.File == parentItem.File || item.File == parentItem.Name && item.ParentId == 1;
+}
 
 
-    // Suche im ganzen Baum 
-    MyClass FoundChildItem(List<MyClass> list, string search, int counter)
+// Suche im ganzen Baum 
+MyClass searchItem(string search)
+{
+    MyClass item = null;
+    int counter = 1;
+    foreach (MyClass child in data)
     {
-        MyClass item = null;
-        foreach (MyClass child in list)
+        if (search == "" || foundAllWordsInItem(child, search)) // nach mehr als einem Wort suchen
         {
-            if (foundAllWordsInItem(child, search)) // nach mehr als einem Wort suchen
+            if (counter == searchCounter)
             {
-                if (counter == searchCounter)
-                {
-                    item = child;
-                    break;
-                }
-                counter += 1;
+                item = child;
+                break;
             }
+            counter += 1;
         }
-        if (item is null)
-        {
-            foreach (MyClass child in list)
-            {
-                if (item is null)
-                {
-                    item = FoundChildItem(data.Where(i => matchList(i, child)).ToList(), search, counter);
-                }
-            }
-        }
-        return item;
     }
+    return item;
+}
 
-    string itemPath(MyClass item)
+string itemPath(MyClass item)
+{
+    string path = "";
+    while (item != null && item.ParentId != 0)
     {
-        string path = "";
-        while (item != null && item.ParentId != 0)
+        item = data.FirstOrDefault(i => i.Id == item.ParentId && i.File == item.File);
+        if (item != null)
         {
-            item = data.FirstOrDefault(i => i.Id == item.ParentId && i.File == item.File);
-            if (item != null)
-            {
-                path += item.Name;
-            }
+            path += item.Name;
         }
-        return path;
     }
+    return path;
+}
 
-    bool foundAllWordsInItem(MyClass item, string search)
+bool foundAllWordsInItem(MyClass item, string search)
+{
+    bool found = false;
+    if (isSynonymInText(item.Name, search))
     {
-        bool found = false;
-        if (isSynonymInText(item.Name, search))
+        found = true;
+    }
+    else
+    {
+        foreach (string word in search.Split(" "))
         {
-            found = true;
-        }
-        else
-        {
-            foreach (string word in search.Split(" "))
+            if (isSynonymInText(item.Name, word))
             {
-                if (isSynonymInText(item.Name, word))
+                found = true;
+                string path = itemPath(item);
+                foreach (string nextWord in search.Split(" "))
                 {
-                    found = true;
-                    string path = itemPath(item);
-                    foreach (string nextWord in search.Split(" "))
+                    if (nextWord != word && !isSynonymInText(item.Name + path, nextWord))
                     {
-                        if (nextWord != word && !isSynonymInText(item.Name + path, nextWord))
-                        {
-                            found = false;
-                        }
+                        found = false;
                     }
                 }
             }
         }
-        return found;
     }
+    return found;
+}
 
-    bool isSynonymInText(string text, string word)
+bool isSynonymInText(string text, string word)
+{
+    bool found = false;
+    if (text.ToLower().Contains(word.ToLower()))
     {
-        bool found = false;
-        if (text.ToLower().Contains(word.ToLower()))
+        found = true;
+    }
+    else
+    {
+        MyClass synItem = data.Find(item => item.Name == "Synonyme");
+        if (synItem != null)
         {
-            found = true;
-        }
-        else
-        {
-            MyClass synItem = data.Find(item => item.Name == "Synonyme");
+            synItem = data.Find(item => item.Name.Contains(word) && item.ParentId == synItem.Id);
             if (synItem != null)
             {
-                synItem = data.Find(item => item.Name.Contains(word) && item.ParentId == synItem.Id);
-                if (synItem != null)
+                foreach (var synWord in synItem.Name.Split(","))
                 {
-                    foreach (var synWord in synItem.Name.Split(","))
+                    if (text.ToLower().Contains(synWord.ToLower()))
                     {
-                        if (text.ToLower().Contains(synWord.ToLower()))
-                        {
-                            found = true;
-                        }
+                        found = true;
                     }
                 }
             }
-
         }
-        return found;
     }
+    return found;
 }
 
 void setAndSaveNewItem(string name)
