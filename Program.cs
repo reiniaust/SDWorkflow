@@ -1,5 +1,6 @@
 using Newtonsoft.Json;
 using System;
+using System.Globalization;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Collections.Generic;
@@ -7,6 +8,8 @@ using MimeKit;
 using MsgReader;
 using System.Security.Cryptography;
 using static System.Runtime.InteropServices.JavaScript.JSType;
+using System.Xml.Linq;
+using Microsoft.Office.Interop.Outlook;
 
 MyClass currentItem;
 MyClass newItem = null;
@@ -41,8 +44,10 @@ Dictionary<int, string> daysOfWeek = new Dictionary<int, string>();
     daysOfWeek.Add(5, "Freitag");
     daysOfWeek.Add(6, "Samstag");
     daysOfWeek.Add(0, "Sonntag");
+    daysOfWeek.Add(7, "diese Woche");
+    daysOfWeek.Add(14, "nächste Woche");
 }
-string weekdayName = daysOfWeek[weekdayNumber];
+string weekdayNameToday = daysOfWeek[weekdayNumber];
 
 //HelperClass.SetForeground("Outlook");
 //executeCommand("subst s: \"g:\\Meine Ablage\"");
@@ -93,7 +98,7 @@ while (input == "s" || input == "")
 
     // Termin-Worte ändern
     {
-        currentItem = data.Find(item => item.Name == weekdayName);
+        currentItem = data.Find(item => item.Name == weekdayNameToday);
         if (currentItem != null)
         {
             currentItem.Name = "heute";
@@ -112,7 +117,7 @@ while (input == "s" || input == "")
         currentItem = data.Find(item => item.Name == "heute" && item.TimeStamp.AddDays(1).Date == DateTime.Today);
         if (currentItem != null)
         {
-            currentItem.Name = "gestern";
+            currentItem.Name = "Rückstand";
             saveDataItem();
         }
         // dann "morgen" auf "heute"
@@ -120,6 +125,19 @@ while (input == "s" || input == "")
         if (currentItem != null)
         {
             currentItem.Name = "heute";
+            saveDataItem();
+        }
+
+        currentItem = data.Find(item => item.Name == "diese Woche" && GetIso8601WeekOfYear(item.TimeStamp) < GetIso8601WeekOfYear(DateTime.Today));
+        if (currentItem != null)
+        {
+            currentItem.Name = "Rückstand";
+            saveDataItem();
+        }
+        currentItem = data.Find(item => item.Name == "nächste Woche" && GetIso8601WeekOfYear(item.TimeStamp) < GetIso8601WeekOfYear(DateTime.Today));
+        if (currentItem != null)
+        {
+            currentItem.Name = "diese Woche";
             saveDataItem();
         }
     }
@@ -142,7 +160,8 @@ while (input == "s" || input == "")
         {
             currentItem = data.Find(item => item.Name == "Vorgänge");
             var message = new MsgReader.Outlook.Storage.Message(file);
-            setAndSaveNewItem(message.Subject);
+            newItem = new() { Name = message.Subject };
+            saveDataItem();
             message.Dispose();
             string newFolder = path + newItem.Id;
             Directory.CreateDirectory(newFolder);
@@ -152,8 +171,9 @@ while (input == "s" || input == "")
             Directory.Move(file, newPath);
 
             newPath = "\"" + newPath + "\"";
+            newItem.Name = newPath;
             currentItem = newItem;
-            setAndSaveNewItem(newPath);
+            saveDataItem();
             executeCommand(newPath);
 
             Console.WriteLine(message.Subject);
@@ -164,7 +184,8 @@ while (input == "s" || input == "")
             if (dateItem is null)
             {
                 currentItem = data.Find(item => item.Name == "Termine");
-                setAndSaveNewItem(dateString);
+                newItem = new() { Name = dateString };
+                saveDataItem();
                 dateItem = newItem;
             }
             emailItem.DependenceIds.Add(dateItem.Id);
@@ -179,7 +200,8 @@ while (input == "s" || input == "")
                     MyClass colleaguesItem = data.Find(item => item.Name.ToLower().Contains(responsible.ToLower()));
                     if (colleaguesItem is null)
                     {
-                        setAndSaveNewItem(responsible);
+                        newItem = new() { Name = responsible };
+                        saveDataItem();
                         colleaguesItem = newItem;
                     }
                     emailItem.DependenceIds.Add(colleaguesItem.Id);
@@ -206,24 +228,27 @@ while (input == "s" || input == "")
 
 void saveDataItem()
 {
-    MyClass item = new();
+    MyClass item = null;
     json = File.ReadAllText(currentItem.File);
     tempData = JsonConvert.DeserializeObject<List<MyClass>>(json);
     if (newItem != null)
     {
-        tempData.Add(newItem);
+        item = newItem;
+        item.Id = tempData.Max(item => item.Id) + 1;
+        item.File = currentItem.File;
+        item.ParentId = currentItem.Id;
+        item.UserName = Environment.GetEnvironmentVariable("USERNAME");
+        tempData.Add(item);
     }
     if (modifyItem != null)
     {
         item = tempData.Find(i => i.Id == modifyItem.Id);
         item.Name = modifyItem.Name;
-        item.TimeStamp = DateTime.Now;
     }
     if (cutItem != null)
     {
         item = tempData.Find(i => i.Id == cutItem.Id);
         item.ParentId = currentItem.Id;
-        item.TimeStamp = DateTime.Now;
     }
     if (data.Find(i => i.Id == currentItem.Id) == null)
     {
@@ -231,15 +256,16 @@ void saveDataItem()
         item = tempData.Find(i => i.Id == currentItem.Id);
         tempData.Remove(item);
     }
-    if (item.Id == 0)
+    if (item == null)
     {
         item = tempData.Find(i => i.Id == currentItem.Id);
-        item.Name = currentItem.Name;   
+        item.Name = currentItem.Name;
         // Erledigt setzen
         item.Done = currentItem.Done;
         // Abhängigkeiten speichern
-        item.DependenceIds = currentItem.DependenceIds; 
+        item.DependenceIds = currentItem.DependenceIds;
     }
+    item.TimeStamp = DateTime.Now;
 
     json = JsonConvert.SerializeObject(tempData.ToList(), Formatting.Indented);
     File.WriteAllText(currentItem.File, json);
@@ -436,7 +462,9 @@ void showList()
             if (newItem is not null)
             {
                 // Text hinzufügen und speichern
-                setAndSaveNewItem(input);
+                newItem.Name = input;
+                data.Add(newItem);
+                saveDataItem();
                 newItem = null;
             }
             else
@@ -626,7 +654,13 @@ void showList()
 // die passenden Unterpunkte zuordnen (je nach Joson-Datei)
 bool matchList(MyClass item, MyClass parentItem)
 {
-    return item.ParentId == parentItem.Id && item.File == parentItem.File || item.File == parentItem.Name && item.ParentId == 1;
+    bool infoForUser = true;
+    MyClass parentParent = data.Find(i => i.Id == parentItem.ParentId && i.File == parentItem.File);
+    if (parentParent != null && parentParent.Name == "Termine")
+    {
+        infoForUser = (item.UserName == "" || item.UserName == Environment.GetEnvironmentVariable("USERNAME"));
+    }
+    return infoForUser && (item.ParentId == parentItem.Id && item.File == parentItem.File || item.File == parentItem.Name && item.ParentId == 1);
 }
 
 
@@ -718,20 +752,6 @@ bool isSynonymInText(string text, string word)
         }
     }
     return found;
-}
-
-void setAndSaveNewItem(string name)
-{
-    newItem = new()
-    {
-        Id = data.Max(item => item.Id) + 1,
-        File = currentItem.File,
-        Name = name,
-        ParentId = currentItem.Id,
-        TimeStamp = DateTime.Now
-    };
-    data.Add(newItem);
-    saveDataItem();
 }
 
 
@@ -856,10 +876,18 @@ int getWeekdayNumber(string dateString)
         var day = daysOfWeek.First(d => d.Value.ToLower() == dateString.ToLower());
         return day.Key;
     }
-    catch (Exception)
+    catch (System.Exception)
     {
         return 0;
     }
+}
+static int GetIso8601WeekOfYear(DateTime date)
+{
+    // Get the Calendar instance associated with the specified culture.
+    Calendar calendar = CultureInfo.InvariantCulture.Calendar;
+
+    // Determine the week of the year using ISO 8601 rules.
+    return calendar.GetWeekOfYear(date, CalendarWeekRule.FirstFourDayWeek, DayOfWeek.Monday);
 }
 
 class MyClass
@@ -871,6 +899,7 @@ class MyClass
     public int Position { get; set; }
     public List<int> DependenceIds { get; set; } = new List<int>();
     public bool Done { get; set; } = false;
+    public string UserName { get; set; } = "";
     public DateTime TimeStamp { get; set; } = DateTime.Now;
 }
 
