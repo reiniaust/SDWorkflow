@@ -77,7 +77,7 @@ while (input == "s" || input == "")
     catch (System.Exception)
     {
         data = new();
-        data.Add(new MyClass() { Id = 1, Name = "SDWorkflow" });
+        data.Add(new MyClass() { Id = 1, Name = "SDWorkflow", File = filePath[0]});
     }
     tempData = new();
     foreach (var file in data.Where(i => i.ParentId == 1 && i.Name.EndsWith(".json")))
@@ -155,6 +155,11 @@ while (input == "s" || input == "")
     {
         string path = Path.GetDirectoryName(item) + "\\";
 
+        if (!Directory.Exists(path))
+        {
+            Directory.CreateDirectory(path);
+        }
+
         //string downloadFolderPath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + "\\Downloads\\";
         string[] files = Directory.GetFiles(path, "*.msg");
         foreach (string file in files)
@@ -163,17 +168,17 @@ while (input == "s" || input == "")
             var message = new MsgReader.Outlook.Storage.Message(file);
             newItem = new() { Name = message.Subject };
             saveDataItem();
+            MyClass subjectItem = newItem;
             message.Dispose();
             string newFolder = path + newItem.Id;
             Directory.CreateDirectory(newFolder);
-            MyClass emailItem = newItem;
+            //MyClass emailItem = newItem;
 
             string newPath = newFolder + "\\" + Path.GetFileName(file);
             Directory.Move(file, newPath);
-
             newPath = "\"" + newPath + "\"";
-            newItem.Name = newPath;
-            currentItem = newItem;
+            newItem = new() { Name = newPath };
+            currentItem = subjectItem;
             saveDataItem();
             executeCommand(newPath);
 
@@ -188,8 +193,9 @@ while (input == "s" || input == "")
                 newItem = new() { Name = dateString };
                 saveDataItem();
                 dateItem = newItem;
+                newItem = null;
             }
-            emailItem.DependenceIds.Add(dateItem.Id);
+            subjectItem.DependenceIds.Add(dateItem.Id);
 
             currentItem = data.Find(item => item.Name == "Kollegen");
             if (currentItem != null)
@@ -205,15 +211,19 @@ while (input == "s" || input == "")
                         saveDataItem();
                         colleaguesItem = newItem;
                     }
-                    emailItem.DependenceIds.Add(colleaguesItem.Id);
+                    subjectItem.DependenceIds.Add(colleaguesItem.Id);
                     Console.WriteLine("Weiterleitung an " + responsible + ": bitte kümmere dich bis " + dateString + " darum und gib mir dann ein Feedback.");
                 }
             }
 
+            modifyItem = subjectItem;
+            saveDataItem();
+            modifyItem = null;
+
             Console.WriteLine("Antwort an Kunden: wir kümmern uns darum und geben bis " + dateString + " ein Feedback.");
             Console.ReadKey();
 
-            currentItem = emailItem;
+            currentItem = subjectItem;
             newItem = null;
 
         }
@@ -230,8 +240,17 @@ while (input == "s" || input == "")
 void saveDataItem()
 {
     MyClass item = null;
-    json = File.ReadAllText(currentItem.File);
-    tempData = JsonConvert.DeserializeObject<List<MyClass>>(json);
+    
+    if (File.Exists(currentItem.File))
+    {
+        json = File.ReadAllText(currentItem.File);
+        tempData = JsonConvert.DeserializeObject<List<MyClass>>(json);
+    }
+    else
+    {
+        tempData = data.ToList();
+    }
+    
     if (newItem != null)
     {
         item = newItem;
@@ -245,17 +264,19 @@ void saveDataItem()
     {
         item = tempData.Find(i => i.Id == modifyItem.Id);
         item.Name = modifyItem.Name;
+        item.DependenceIds = modifyItem.DependenceIds;
     }
     if (cutItem != null)
     {
         item = tempData.Find(i => i.Id == cutItem.Id);
         item.ParentId = currentItem.Id;
-    }
-    if (data.Find(i => i.Id == currentItem.Id) == null)
-    {
-        // Löschen
-        item = tempData.Find(i => i.Id == currentItem.Id);
-        tempData.Remove(item);
+
+        if (data.Find(i => i.Id == currentItem.Id) == null)
+        {
+            // Löschen
+            item = tempData.Find(i => i.Id == currentItem.Id);
+            tempData.Remove(item);
+        }
     }
     if (item == null)
     {
@@ -297,7 +318,7 @@ void showList()
         }
 
         string done = "";
-        if (currentItem.Done)
+        if (currentItem != null && currentItem.Done)
         {
             done = "Erledigt ";
         }
@@ -542,8 +563,10 @@ void showList()
                                     if (input == "l")
                                     {
                                         // Löschen
+                                        cutItem = currentItem;
                                         data.Remove(currentItem);
                                         saveDataItem();
+                                        cutItem = null;
                                         currentItem = data.Find(item => item.Id == currentItem.ParentId && item.File == currentItem.File);
                                     }
                                     else
@@ -679,7 +702,7 @@ bool isInfoForUser(MyClass item, MyClass parentItem)
     return infoForUser;
 }
 
-MyClass getParentItem(MyClass item) 
+MyClass getParentItem(MyClass item)
 {
     return data.Find(i => i.Id == item.ParentId && i.File == item.File || i.Name == item.File && i.ParentId == 1);
 }
@@ -727,6 +750,13 @@ bool foundAllWordsInItem(MyClass item, string search)
     }
     else
     {
+        // auch in Anhängigkeiten suchen
+        string depString = "";
+        foreach (MyClass child in dependenceList(item))
+        {
+            depString += child.Name;
+        }
+
         foreach (string word in search.Split(" "))
         {
             if (isSynonymInText(item.Name, word))
@@ -735,7 +765,7 @@ bool foundAllWordsInItem(MyClass item, string search)
                 string path = itemPath(item);
                 foreach (string nextWord in search.Split(" "))
                 {
-                    if (nextWord != word && !isSynonymInText(item.Name + path, nextWord))
+                    if (nextWord != word && !isSynonymInText(item.Name + path + depString, nextWord))
                     {
                         found = false;
                     }
@@ -772,6 +802,20 @@ bool isSynonymInText(string text, string word)
         }
     }
     return found;
+}
+
+List<MyClass> dependenceList(MyClass item)
+{
+    List<MyClass> list = new();
+    foreach (int id in item.DependenceIds)
+    {
+        MyClass depItem = data.Find(item => item.Id == id);
+        if (depItem != null)
+        {
+            list.Add(depItem);
+        }
+    }
+    return list;
 }
 
 
