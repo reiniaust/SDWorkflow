@@ -12,6 +12,7 @@ using System.Xml.Linq;
 using Microsoft.Office.Interop.Outlook;
 
 MyClass currentItem;
+string currentUserName = Environment.GetEnvironmentVariable("USERNAME");
 MyClass newItem = null;
 MyClass modifyItem = null;
 MyClass cutItem = null;
@@ -237,7 +238,7 @@ void saveDataItem()
         item.Id = tempData.Max(item => item.Id) + 1;
         item.File = currentItem.File;
         item.ParentId = currentItem.Id;
-        item.UserName = Environment.GetEnvironmentVariable("USERNAME");
+        item.UserName = currentUserName;
         tempData.Add(item);
     }
     if (modifyItem != null)
@@ -300,7 +301,12 @@ void showList()
         {
             done = "Erledigt ";
         }
-        Console.WriteLine(currentItem.Name + " (" + done + currentItem.TimeStamp + ")");
+        string userString = "";
+        if (currentItem.UserName != "" && currentItem.UserName != currentUserName)
+        {
+            userString = currentItem.UserName + " ";
+        }
+        Console.WriteLine(currentItem.Name + " (" + userString + done + currentItem.TimeStamp + ")");
         Console.WriteLine();
 
         if (currentItem.Name.StartsWith("Termine"))
@@ -326,12 +332,16 @@ void showList()
             }
             if (plus == "")
             {
+                // Verwendungen prüfen
                 foreach (var depItem in data.Where(item => !item.Done))
                 {
                     if (depItem.DependenceIds.Contains(item.Id))
                     {
-                        plus = " +";
-                        break;
+                        if (isInfoForUser(depItem, item))
+                        {
+                            plus = " +";
+                            break;
+                        }
                     }
                 }
             }
@@ -654,15 +664,25 @@ void showList()
 // die passenden Unterpunkte zuordnen (je nach Joson-Datei)
 bool matchList(MyClass item, MyClass parentItem)
 {
-    bool infoForUser = true;
-    MyClass parentParent = data.Find(i => i.Id == parentItem.ParentId && i.File == parentItem.File);
-    if (parentParent != null && parentParent.Name == "Termine")
-    {
-        infoForUser = (item.UserName == "" || item.UserName == Environment.GetEnvironmentVariable("USERNAME"));
-    }
-    return infoForUser && (item.ParentId == parentItem.Id && item.File == parentItem.File || item.File == parentItem.Name && item.ParentId == 1);
+    return isInfoForUser(item, parentItem) && (item.ParentId == parentItem.Id && item.File == parentItem.File || item.File == parentItem.Name && item.ParentId == 1);
 }
 
+// Prüfen, dass bei Terminen nur eigene Punkte reinkommen
+bool isInfoForUser(MyClass item, MyClass parentItem)
+{
+    bool infoForUser = true;
+    MyClass parentParent = getParentItem(parentItem);
+    if (parentParent != null && parentParent.Name == "Termine")
+    {
+        infoForUser = (item.UserName == "" || item.UserName == currentUserName);
+    }
+    return infoForUser;
+}
+
+MyClass getParentItem(MyClass item) 
+{
+    return data.Find(i => i.Id == item.ParentId && i.File == item.File || i.Name == item.File && i.ParentId == 1);
+}
 
 // Suche im ganzen Baum 
 MyClass searchItem(string search)
