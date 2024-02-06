@@ -11,6 +11,7 @@ using static System.Runtime.InteropServices.JavaScript.JSType;
 using System.Xml.Linq;
 using Microsoft.Office.Interop.Outlook;
 
+bool showHelp = false;
 MyClass currentItem;
 string currentUserName = Environment.GetEnvironmentVariable("USERNAME");
 MyClass newItem = null;
@@ -23,8 +24,8 @@ List<MyClass> data = new();
 List<MyClass> tempData = new();
 string? input = "";
 //string filePath[0] = @"S:\SDWorkflow\";
-List<string> filePath = new();
-filePath.Add(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + @"\SDWorkflow\data.json");
+List<string> filePathArray = new();
+filePathArray.Add(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + @"\SDWorkflow\data.json");
 //string fileName = "data.json";
 string fileNameToDay = DateTime.Today.ToString().Split(" ")[0].Replace(".", "");
 string varName = "";
@@ -61,41 +62,7 @@ while (input == "s" || input == "")
     lastSearch = "";
 
     // Daten lesen        
-    try
-    {
-        if (data.Count == 0)
-        {
-            executeCommand(Path.GetDirectoryName(filePath[0]));
-        }
-        json = File.ReadAllText(filePath[0]);
-        data = JsonConvert.DeserializeObject<List<MyClass>>(json);
-        foreach (var item in data)
-        {
-            item.File = filePath[0];
-        }
-    }
-    catch (System.Exception)
-    {
-        data = new();
-        data.Add(new MyClass() { Id = 1, Name = "SDWorkflow", File = filePath[0]});
-    }
-    tempData = new();
-    foreach (var file in data.Where(i => i.ParentId == 1 && i.Name.EndsWith(".json")))
-    {
-        filePath.Add(file.Name);
-
-        json = File.ReadAllText(file.Name);
-        foreach (var item in JsonConvert.DeserializeObject<List<MyClass>>(json))
-        {
-            item.File = file.Name;
-            tempData.Add(item);
-        }
-    }
-    foreach (var item in tempData)
-    {
-        data.Add(item);
-    }
-
+    readData();
 
     // Termin-Worte ändern
     {
@@ -151,9 +118,9 @@ while (input == "s" || input == "")
     }
 
     // E-Mails aus dem Ordner lesen, Punkte anlegen und verschieben
-    foreach (var item in filePath)
+    foreach (var filePath in filePathArray)
     {
-        string path = Path.GetDirectoryName(item) + "\\";
+        string path = Path.GetDirectoryName(filePath) + "\\";
 
         if (!Directory.Exists(path))
         {
@@ -164,11 +131,19 @@ while (input == "s" || input == "")
         string[] files = Directory.GetFiles(path, "*.msg");
         foreach (string file in files)
         {
-            currentItem = data.Find(item => item.Name == "Vorgänge");
+            currentItem = data.Find(item => item.Name == "Vorgänge" && item.File == filePath);
             var message = new MsgReader.Outlook.Storage.Message(file);
             newItem = new() { Name = message.Subject };
+            // Kunde (Absender)
+            MyClass customerItem = data.Find(item => item.Name.ToLower().Contains(message.Headers.From.Address.ToLower()));
+            if (customerItem != null)
+            {
+                newItem.DependenceIds.Add(customerItem.Id);
+            }
             saveDataItem();
             MyClass subjectItem = newItem;
+
+
             message.Dispose();
             string newFolder = path + newItem.Id;
             Directory.CreateDirectory(newFolder);
@@ -230,68 +205,11 @@ while (input == "s" || input == "")
     }
 
 
-    currentList = data.Where(item => item.ParentId == currentItem.Id && item.File == filePath[0]).ToList();
+    currentList = data.Where(item => item.ParentId == currentItem.Id && item.File == filePathArray[0]).ToList();
 
     showList();
 
     //saveData();
-}
-
-void saveDataItem()
-{
-    MyClass item = null;
-    
-    if (File.Exists(currentItem.File))
-    {
-        json = File.ReadAllText(currentItem.File);
-        tempData = JsonConvert.DeserializeObject<List<MyClass>>(json);
-    }
-    else
-    {
-        tempData = data.ToList();
-    }
-    
-    if (newItem != null)
-    {
-        item = newItem;
-        item.Id = tempData.Max(item => item.Id) + 1;
-        item.File = currentItem.File;
-        item.ParentId = currentItem.Id;
-        item.UserName = currentUserName;
-        tempData.Add(item);
-    }
-    if (modifyItem != null)
-    {
-        item = tempData.Find(i => i.Id == modifyItem.Id);
-        item.Name = modifyItem.Name;
-        item.DependenceIds = modifyItem.DependenceIds;
-    }
-    if (cutItem != null)
-    {
-        item = tempData.Find(i => i.Id == cutItem.Id);
-        item.ParentId = currentItem.Id;
-
-        if (data.Find(i => i.Id == currentItem.Id) == null)
-        {
-            // Löschen
-            item = tempData.Find(i => i.Id == currentItem.Id);
-            tempData.Remove(item);
-        }
-    }
-    if (item == null)
-    {
-        item = tempData.Find(i => i.Id == currentItem.Id);
-        item.Name = currentItem.Name;
-        // Erledigt setzen
-        item.Done = currentItem.Done;
-        // Abhängigkeiten speichern
-        item.DependenceIds = currentItem.DependenceIds;
-    }
-    item.TimeStamp = DateTime.Now;
-
-    json = JsonConvert.SerializeObject(tempData.ToList(), Formatting.Indented);
-    File.WriteAllText(currentItem.File, json);
-    File.WriteAllText(currentItem.File + fileNameToDay, json);
 }
 
 
@@ -414,56 +332,64 @@ void showList()
     }
 
     Console.WriteLine();
-    Console.WriteLine("h Hinzufügen");
-    if (currentItem.Id != 1)
+
+    if (showHelp)
     {
-        Console.WriteLine("ä Ändern");
-        if (cutItem is null)
+        Console.WriteLine("? Hilfe ausblenden");
+        Console.WriteLine("+ Hinzufügen");
+        if (currentItem.Id != 1)
         {
-            Console.WriteLine("a Ausschneiden");
-            Console.WriteLine("l Löschen");
-        }
-        else
-        {
-            Console.WriteLine("a Ausgeschnittenen Punkt einfügen");
+            Console.WriteLine("* Ändern");
+            if (cutItem is null)
+            {
+                Console.WriteLine("< Ausschneiden");
+                Console.WriteLine("- Löschen");
+            }
+            else
+            {
+                Console.WriteLine("> Ausgeschnittenen Punkt einfügen");
+            }
+
+            if (currentItem.Done)
+            {
+                Console.WriteLine(". Auf Nicht Erledigt setzen");
+            }
+            else
+            {
+                Console.WriteLine(". Auf Erledigt setzen");
+            }
+
+            if (dependenceItem is null)
+            {
+                Console.WriteLine("v Verknüpfung/Abhängigkeit hinzufügen");
+            }
+            else
+            {
+                Console.WriteLine("v Verknüpfung/Abhängigkeit setzen");
+            }
         }
 
-        if (currentItem.Done)
+        if (currentList.Where(item => item.Name.StartsWith("Befehl:") || item.Name.StartsWith("[")).Count() > 0)
         {
-            Console.WriteLine("e Auf Nicht Erledigt setzen");
+            Console.WriteLine("b Befehle ausführen und/oder Platzhalter zuweisen");
         }
-        else
+        if (currentItem.Id != 1)
         {
-            Console.WriteLine("e Auf Erledigt setzen");
+            Console.WriteLine("z Zurück");
         }
-
-        if (dependenceItem is null)
+        if (currentItem.Id != 1 || cutItem is not null)
         {
-            Console.WriteLine("v Verknüpfung/Abhängigkeit hinzufügen");
+            Console.WriteLine("s Startseite");
         }
-        else
-        {
-            Console.WriteLine("v Verknüpfung/Abhängigkeit setzen");
-        }
-
+        Console.WriteLine("x Ende");
     }
-
-    if (currentList.Where(item => item.Name.StartsWith("Befehl:") || item.Name.StartsWith("[")).Count() > 0)
+    else
     {
-        Console.WriteLine("b Befehle ausführen und/oder Platzhalter zuweisen");
+        Console.WriteLine("? Hilfe einblenden");
     }
-    if (currentItem.Id != 1)
-    {
-        Console.WriteLine("z Zurück");
-    }
-    if (currentItem.Id != 1 || cutItem is not null)
-    {
-        Console.WriteLine("s Startseite");
-    }
-    Console.WriteLine("x Ende");
     Console.WriteLine();
 
-    if (input == "h" || input == "ä")
+    if (input == "+" || input == "*")
     {
         // Ändern
         Console.WriteLine("Neuer Titel:");
@@ -475,7 +401,7 @@ void showList()
     {
         input = lastSearch;
         searchCounter += 1;
-        currentList = data.Where(item => item.ParentId == 1 && item.File == filePath[0]).ToList();
+        currentList = data.Where(item => item.ParentId == 1 && item.File == filePathArray[0]).ToList();
     }
     else
     {
@@ -484,186 +410,193 @@ void showList()
 
     if (input != "x" && input != "s")
     {
-        if (input == "z" && currentItem.ParentId != 0)
+        if (input == "?")
         {
-            currentItem = data.Find(item => item.Id == currentItem.ParentId && item.File == currentItem.File);
+            showHelp = !showHelp;
         }
         else
         {
-            if (newItem is not null)
+            if (input == "z" && currentItem.ParentId != 0)
             {
-                // Text hinzufügen und speichern
-                newItem.Name = input;
-                data.Add(newItem);
-                saveDataItem();
-                newItem = null;
+                currentItem = data.Find(item => item.Id == currentItem.ParentId && item.File == currentItem.File);
             }
             else
             {
-
-                if (modifyItem is not null)
+                if (newItem is not null)
                 {
-                    // Änderung speichern
-                    modifyItem.Name = input;
+                    // Text hinzufügen und speichern
+                    newItem.Name = input;
+                    data.Add(newItem);
                     saveDataItem();
-                    modifyItem = null;
+                    newItem = null;
                 }
                 else
                 {
-                    if (input == "h")
+
+                    if (modifyItem is not null)
                     {
-                        // Hinzufügen
-                        newItem = new();
+                        // Änderung speichern
+                        modifyItem.Name = input;
+                        saveDataItem();
+                        modifyItem = null;
                     }
                     else
                     {
-                        if (input == "v")
+                        if (input == "+")
                         {
-                            // Verknüpfung/Abhängigkeit
-                            if (dependenceItem is null)
-                            {
-                                dependenceItem = currentItem;
-                            }
-                            else
-                            {
-                                dependenceItem = data.Find(item => item.Id == dependenceItem.Id);
-                                dependenceItem.DependenceIds.Add(currentItem.Id);
-                                currentItem = dependenceItem;
-                                saveDataItem();
-                                dependenceItem = null;
-                            }
+                            // Hinzufügen
+                            newItem = new();
                         }
                         else
                         {
-                            if (input == "ä")
+                            if (input == "v")
                             {
-                                // Ändern
-                                modifyItem = currentItem;
-                            }
-                            else
-                            {
-                                if (input == "a")
+                                // Verknüpfung/Abhängigkeit
+                                if (dependenceItem is null)
                                 {
-                                    // Ausschneiden
-                                    if (cutItem is null)
-                                    {
-                                        cutItem = currentItem;
-                                        currentItem = data.Find(item => item.Id == currentItem.ParentId && item.File == currentItem.File);
-                                        cutItem.ParentId = 0;
-                                    }
-                                    else
-                                    {
-                                        // Ausgeschnittenen Punkt einfügen
-                                        saveDataItem();
-                                        cutItem = null;
-                                    }
+                                    dependenceItem = currentItem;
                                 }
                                 else
                                 {
-                                    if (input == "l")
+                                    dependenceItem = data.Find(item => item.Id == dependenceItem.Id);
+                                    dependenceItem.DependenceIds.Add(currentItem.Id);
+                                    currentItem = dependenceItem;
+                                    saveDataItem();
+                                    dependenceItem = null;
+                                }
+                            }
+                            else
+                            {
+                                if (input == "*")
+                                {
+                                    // Ändern
+                                    modifyItem = currentItem;
+                                }
+                                else
+                                {
+                                    if (input == "<" || input == ">")
                                     {
-                                        // Löschen
-                                        cutItem = currentItem;
-                                        data.Remove(currentItem);
-                                        saveDataItem();
-                                        cutItem = null;
-                                        currentItem = data.Find(item => item.Id == currentItem.ParentId && item.File == currentItem.File);
-                                    }
-                                    else
-                                    {
-                                        if (input == "e")
+                                        // Ausschneiden
+                                        if (cutItem is null)
                                         {
-                                            // Erledigt/Unerledigt
-                                            currentItem.Done = !currentItem.Done;
-                                            saveDataItem();
+                                            cutItem = currentItem;
+                                            currentItem = data.Find(item => item.Id == currentItem.ParentId && item.File == currentItem.File);
+                                            cutItem.ParentId = 0;
                                         }
                                         else
                                         {
-                                            // Befehle ausführen
-                                            if (input == "b")
+                                            // Ausgeschnittenen Punkt einfügen
+                                            saveDataItem();
+                                            cutItem = null;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        if (input == "-")
+                                        {
+                                            // Löschen
+                                            cutItem = currentItem;
+                                            data.Remove(currentItem);
+                                            saveDataItem();
+                                            cutItem = null;
+                                            currentItem = data.Find(item => item.Id == currentItem.ParentId && item.File == currentItem.File);
+                                        }
+                                        else
+                                        {
+                                            if (input == ".")
                                             {
-                                                foreach (var item in currentList.Where(item => item.Name.StartsWith("Befehl:") || item.Name.StartsWith("[")).ToList())
-                                                {
-                                                    setVariableOrExecuteCommand(item.Name);
-                                                }
-                                                Console.WriteLine("Beliebige Taste drücken...");
-                                                Console.ReadKey();
+                                                // Erledigt/Unerledigt
+                                                currentItem.Done = !currentItem.Done;
+                                                saveDataItem();
                                             }
                                             else
                                             {
-                                                if (currentItem.Name.Contains("]="))
+                                                // Befehle ausführen
+                                                if (input == "b")
                                                 {
-                                                    // Parameter setzen (z.B. [Faelligkeit]=morgen)
-                                                    currentItem.Name = currentItem.Name.Split('=')[0] + "=" + input;
-                                                    setParameter(currentItem.Name);
-                                                    saveDataItem();
-                                                    // eine Ebene zurückgehen
-                                                    currentItem = data.Find(item => item.Id == currentItem.ParentId && item.File == currentItem.File);
+                                                    foreach (var item in currentList.Where(item => item.Name.StartsWith("Befehl:") || item.Name.StartsWith("[")).ToList())
+                                                    {
+                                                        setVariableOrExecuteCommand(item.Name);
+                                                    }
+                                                    Console.WriteLine("Beliebige Taste drücken...");
+                                                    Console.ReadKey();
                                                 }
                                                 else
                                                 {
-                                                    int number;
-                                                    bool isNumber = int.TryParse(input, out number);
-                                                    bool found = false;
-                                                    found = false;
-                                                    foreach (MyClass item in currentList)
+                                                    if (currentItem.Name.Contains("]="))
                                                     {
-                                                        if (isNumber && number == item.Position || input != "" && !isNumber && item.Name.ToLower().Contains(input.ToLower()))
-                                                        {
-                                                            currentItem = item;
-                                                            found = true;
-                                                            break;
-                                                        }
+                                                        // Parameter setzen (z.B. [Faelligkeit]=morgen)
+                                                        currentItem.Name = currentItem.Name.Split('=')[0] + "=" + input;
+                                                        setParameter(currentItem.Name);
+                                                        saveDataItem();
+                                                        // eine Ebene zurückgehen
+                                                        currentItem = data.Find(item => item.Id == currentItem.ParentId && item.File == currentItem.File);
                                                     }
-                                                    if (!found)
+                                                    else
                                                     {
-                                                        // Verknüpfung/Abhängigkeit suchen/aufrufen
-                                                        foreach (int id in currentItem.DependenceIds)
+                                                        int number;
+                                                        bool isNumber = int.TryParse(input, out number);
+                                                        bool found = false;
+                                                        found = false;
+                                                        foreach (MyClass item in currentList)
                                                         {
-                                                            MyClass depItem = data.Find(item => item.Id == id);
-                                                            if (depItem != null)
+                                                            if (isNumber && number == item.Position || input != "" && !isNumber && item.Name.ToLower().Contains(input.ToLower()))
                                                             {
-                                                                if (number == -depItem.Position)
+                                                                currentItem = item;
+                                                                found = true;
+                                                                break;
+                                                            }
+                                                        }
+                                                        if (!found)
+                                                        {
+                                                            // Verknüpfung/Abhängigkeit suchen/aufrufen
+                                                            foreach (int id in currentItem.DependenceIds)
+                                                            {
+                                                                MyClass depItem = data.Find(item => item.Id == id);
+                                                                if (depItem != null)
                                                                 {
-                                                                    // Abhängigkeit/Verknüpfung löschen, wenn die Nummer mit minus eingegeben wurde
-                                                                    currentItem.DependenceIds.Remove(id);
-                                                                    break;
-                                                                }
-                                                                if (number == depItem.Position || depItem.Name.ToLower().Contains(input.ToLower()))
-                                                                {
-                                                                    currentItem = depItem;
-                                                                    found = true;
-                                                                    break;
+                                                                    if (number == -depItem.Position)
+                                                                    {
+                                                                        // Abhängigkeit/Verknüpfung löschen, wenn die Nummer mit minus eingegeben wurde
+                                                                        currentItem.DependenceIds.Remove(id);
+                                                                        break;
+                                                                    }
+                                                                    if (number == depItem.Position || depItem.Name.ToLower().Contains(input.ToLower()))
+                                                                    {
+                                                                        currentItem = depItem;
+                                                                        found = true;
+                                                                        break;
+                                                                    }
                                                                 }
                                                             }
                                                         }
-                                                    }
-                                                    if (!found)
-                                                    {
-                                                        foreach (var item in data)
+                                                        if (!found)
                                                         {
-                                                            if (item.DependenceIds.Contains(currentItem.Id))
+                                                            foreach (var item in data)
                                                             {
-                                                                if (input == item.Position.ToString())
+                                                                if (item.DependenceIds.Contains(currentItem.Id))
                                                                 {
-                                                                    currentItem = item;
-                                                                    found = true;
-                                                                    break;
+                                                                    if (input == item.Position.ToString())
+                                                                    {
+                                                                        currentItem = item;
+                                                                        found = true;
+                                                                        break;
+                                                                    }
                                                                 }
                                                             }
                                                         }
-                                                    }
 
-                                                    if (!found)
-                                                    {
-                                                        // in allen Daten suchen
-                                                        MyClass foundItem = searchItem(input);
+                                                        if (!found)
+                                                        {
+                                                            // in allen Daten suchen
+                                                            MyClass foundItem = searchItem(input);
 
-                                                        if (foundItem is not null)
-                                                            currentItem = foundItem;
+                                                            if (foundItem is not null)
+                                                                currentItem = foundItem;
+                                                        }
+                                                        lastSearch = input;
+                                                        input = "";
                                                     }
-                                                    lastSearch = input;
-                                                    input = "";
                                                 }
                                             }
                                         }
@@ -816,6 +749,103 @@ List<MyClass> dependenceList(MyClass item)
         }
     }
     return list;
+}
+
+// Daten lesen
+void readData() {
+        try
+    {
+        if (data.Count == 0)
+        {
+            executeCommand(Path.GetDirectoryName(filePathArray[0]));
+        }
+        json = File.ReadAllText(filePathArray[0]);
+        data = JsonConvert.DeserializeObject<List<MyClass>>(json);
+        foreach (var item in data)
+        {
+            item.File = filePathArray[0];
+        }
+    }
+    catch (System.Exception)
+    {
+        data = new();
+        data.Add(new MyClass() { Id = 1, Name = "SDWorkflow", File = filePathArray[0]});
+    }
+    tempData = new();
+    foreach (var file in data.Where(i => i.ParentId == 1 && i.Name.EndsWith(".json")))
+    {
+        filePathArray.Add(file.Name);
+
+        json = File.ReadAllText(file.Name);
+        foreach (var item in JsonConvert.DeserializeObject<List<MyClass>>(json))
+        {
+            item.File = file.Name;
+            tempData.Add(item);
+        }
+    }
+    foreach (var item in tempData)
+    {
+        data.Add(item);
+    }
+}
+
+void saveDataItem()
+{
+    MyClass item = null;
+    
+    if (File.Exists(currentItem.File))
+    {
+        json = File.ReadAllText(currentItem.File);
+        tempData = JsonConvert.DeserializeObject<List<MyClass>>(json);
+    }
+    else
+    {
+        tempData = data.ToList();
+    }
+    
+    if (newItem != null)
+    {
+        item = newItem;
+        item.Id = tempData.Max(item => item.Id) + 1;
+        item.File = currentItem.File;
+        item.ParentId = currentItem.Id;
+        item.UserName = currentUserName;
+        tempData.Add(item);
+    }
+    if (modifyItem != null)
+    {
+        item = tempData.Find(i => i.Id == modifyItem.Id);
+        item.Name = modifyItem.Name;
+        item.DependenceIds = modifyItem.DependenceIds;
+    }
+    if (cutItem != null)
+    {
+        item = tempData.Find(i => i.Id == cutItem.Id);
+        item.ParentId = currentItem.Id;
+
+        if (data.Find(i => i.Id == currentItem.Id) == null)
+        {
+            // Löschen
+            item = tempData.Find(i => i.Id == currentItem.Id);
+            tempData.Remove(item);
+        }
+    }
+    if (item == null)
+    {
+        item = tempData.Find(i => i.Id == currentItem.Id);
+        item.Name = currentItem.Name;
+        // Erledigt setzen
+        item.Done = currentItem.Done;
+        // Abhängigkeiten speichern
+        item.DependenceIds = currentItem.DependenceIds;
+    }
+    item.TimeStamp = DateTime.Now;
+
+    json = JsonConvert.SerializeObject(tempData.ToList(), Formatting.Indented);
+    File.WriteAllText(currentItem.File, json);
+    File.WriteAllText(currentItem.File + fileNameToDay, json);
+
+    readData();
 }
 
 
