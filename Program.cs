@@ -136,9 +136,15 @@ while (input == "s" || input == "")
             newItem = new() { Name = message.Subject };
             // Kunde (Absender)
             MyClass customerItem = data.Find(item => item.Name.ToLower().Contains(message.Headers.From.Address.ToLower()));
+            string salutation = "";
             if (customerItem != null)
             {
                 newItem.DependenceIds.Add(customerItem.Id);
+                customerItem = data.Find(item => item.ParentId == customerItem.Id && item.Name.StartsWith("Anrede:"));
+                if (customerItem != null)
+                {
+                    salutation = customerItem.Name.Split("Anrede: ")[1] + ", ";
+                }
             }
             saveDataItem();
             MyClass subjectItem = newItem;
@@ -195,7 +201,7 @@ while (input == "s" || input == "")
             saveDataItem();
             modifyItem = null;
 
-            Console.WriteLine("Antwort an Kunden: wir kümmern uns darum und geben bis " + dateString + " ein Feedback.");
+            Console.WriteLine("Antwort an Kunden: " + salutation + " wir kümmern uns darum und geben bis " + dateString + " ein Feedback.");
             Console.ReadKey();
 
             currentItem = subjectItem;
