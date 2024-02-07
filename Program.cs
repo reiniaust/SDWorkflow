@@ -10,6 +10,9 @@ using System.Security.Cryptography;
 using static System.Runtime.InteropServices.JavaScript.JSType;
 using System.Xml.Linq;
 using Microsoft.Office.Interop.Outlook;
+using System.Data.OleDb;
+using System.Data.Odbc;
+
 
 bool showHelp = false;
 MyClass currentItem;
@@ -24,8 +27,7 @@ List<MyClass> data = new();
 List<MyClass> tempData = new();
 string? input = "";
 //string filePath[0] = @"S:\SDWorkflow\";
-List<string> filePathArray = new();
-filePathArray.Add(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + @"\SDWorkflow\data.json");
+List<string> filePathArray;
 //string fileName = "data.json";
 string fileNameToDay = DateTime.Today.ToString().Split(" ")[0].Replace(".", "");
 string varName = "";
@@ -54,6 +56,7 @@ string weekdayNameToday = daysOfWeek[weekdayNumber];
 //HelperClass.SetForeground("Outlook");
 //executeCommand("subst s: \"g:\\Meine Ablage\"");
 
+ReadDataFromAcceessDb();
 
 while (input == "s" || input == "")
 {
@@ -278,7 +281,7 @@ void showList()
             if (plus == "")
             {
                 // Verwendungen prüfen
-                foreach (var depItem in data.Where(item => !item.Done))
+                foreach (var depItem in data.Where(item => item.File == currentItem.File && !item.Done))
                 {
                     if (depItem.DependenceIds.Contains(item.Id))
                     {
@@ -308,7 +311,7 @@ void showList()
             Console.WriteLine("Anhängigkeiten:");
             foreach (int id in currentItem.DependenceIds)
             {
-                MyClass depItem = data.Find(item => item.Id == id);
+                MyClass depItem = data.Find(item => item.File == currentItem.File && item.Id == id);
                 if (depItem != null)
                 {
                     i += 1;
@@ -758,8 +761,12 @@ List<MyClass> dependenceList(MyClass item)
 }
 
 // Daten lesen
-void readData() {
-        try
+void readData()
+{
+    filePathArray = new();
+    filePathArray.Add(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + @"\SDWorkflow\data.json"); 
+    
+    try
     {
         if (data.Count == 0)
         {
@@ -775,7 +782,7 @@ void readData() {
     catch (System.Exception)
     {
         data = new();
-        data.Add(new MyClass() { Id = 1, Name = "SDWorkflow", File = filePathArray[0]});
+        data.Add(new MyClass() { Id = 1, Name = "SDWorkflow", File = filePathArray[0] });
     }
     tempData = new();
     foreach (var file in data.Where(i => i.ParentId == 1 && i.Name.EndsWith(".json")))
@@ -798,7 +805,7 @@ void readData() {
 void saveDataItem()
 {
     MyClass item = null;
-    
+
     if (File.Exists(currentItem.File))
     {
         json = File.ReadAllText(currentItem.File);
@@ -808,7 +815,7 @@ void saveDataItem()
     {
         tempData = data.ToList();
     }
-    
+
     if (newItem != null)
     {
         item = newItem;
@@ -989,6 +996,34 @@ static int GetIso8601WeekOfYear(DateTime date)
     // Determine the week of the year using ISO 8601 rules.
     return calendar.GetWeekOfYear(date, CalendarWeekRule.FirstFourDayWeek, DayOfWeek.Monday);
 }
+
+static void ReadDataFromAcceessDb()
+{
+    string connectionString = @"Driver={Microsoft Access Driver (*.mdb, *.accdb)};Dbq=r:\sd\mdb\kontroll\kontdat.mdb;";
+
+    using (OdbcConnection connection = new OdbcConnection(connectionString))
+    {
+        connection.Open();
+
+        string query = "SELECT * FROM MitarbeiterKtl where len(Text) > 0;";
+        OdbcCommand command = new OdbcCommand(query, connection);
+
+        using (OdbcDataReader reader = command.ExecuteReader())
+        {
+            while (reader.Read())
+            {
+                int id = (int)reader["SatzId"];
+                string text = (string)reader["Text"];
+                DateTime date = (DateTime)reader["Datum"];
+
+                Console.WriteLine($"ID: {id}, Name: {text}, Date: {date}");
+            }
+        }
+    }
+
+    Console.ReadLine();
+}
+
 
 class MyClass
 {
