@@ -56,7 +56,7 @@ string weekdayNameToday = daysOfWeek[weekdayNumber];
 //HelperClass.SetForeground("Outlook");
 //executeCommand("subst s: \"g:\\Meine Ablage\"");
 
-ReadDataFromAcceessDb();
+//ReadDataFromAcceessDb();
 
 while (input == "s" || input == "")
 {
@@ -113,8 +113,11 @@ while (input == "s" || input == "")
         }
     }
 
-    currentItem = data[0]; // wenn man Startseite gewählt hat
-    data = data.OrderByDescending(item => item.TimeStamp).ToList();
+    if (input == "s")
+    {
+        // wenn man Startseite gewählt hat
+        currentItem = data.Find(i => i.Id == 1); 
+    }
     if (input == "")
     {
         currentItem = searchItem("");
@@ -237,111 +240,7 @@ void showList()
     }
 
 
-    // Daten anzeigen
-    {
-        foreach (var item in data)
-        {
-            item.Position = 0;
-        }
-
-        string done = "";
-        if (currentItem != null && currentItem.Done)
-        {
-            done = "Erledigt ";
-        }
-        string userString = "";
-        if (currentItem.UserName != "" && currentItem.UserName != currentUserName)
-        {
-            userString = currentItem.UserName + " ";
-        }
-        Console.WriteLine(currentItem.Name + " (" + userString + done + currentItem.TimeStamp + ")");
-        Console.WriteLine();
-
-        if (currentItem.Name.StartsWith("Termine"))
-        {
-            currentList = currentList.OrderBy(i => dateFromWord(i.Name)).ToList();
-        }
-        else
-        {
-            currentList = currentList.OrderBy(i => i.TimeStamp).ToList();
-        }
-
-
-        int i = 0;
-        foreach (MyClass item in currentList)
-        {
-            // Pluszeigen setzen, wenn Unterpunkte, Abhängikeiten oder Verwendungen im Unterpunkt sind
-            string plus = "";
-            i += 1;
-            item.Position = i;
-            if (data.Where(child => matchList(child, item)).ToList().Count > 0 || item.DependenceIds.Count > 0)
-            {
-                plus = " +";
-            }
-            if (plus == "")
-            {
-                // Verwendungen prüfen
-                foreach (var depItem in data.Where(item => item.File == currentItem.File && !item.Done))
-                {
-                    if (depItem.DependenceIds.Contains(item.Id))
-                    {
-                        if (isInfoForUser(depItem, item))
-                        {
-                            plus = " +";
-                            break;
-                        }
-                    }
-                }
-            }
-
-            setParameter(item.Name);
-
-            done = "";
-            if (item.Done)
-            {
-                done = " (Erledigt)";
-            }
-            Console.WriteLine(item.Position + " " + replaceParameterValueInText(item.Name) + done + plus);
-        }
-
-        // Anhängigkeiten anzeigen
-        if (currentItem.DependenceIds.Count > 0)
-        {
-            Console.WriteLine();
-            Console.WriteLine("Anhängigkeiten:");
-            foreach (int id in currentItem.DependenceIds)
-            {
-                MyClass depItem = data.Find(item => item.File == currentItem.File && item.Id == id);
-                if (depItem != null)
-                {
-                    i += 1;
-                    depItem.Position = i;
-                    Console.WriteLine(depItem.Position + " " + depItem.Name);
-                }
-            }
-        }
-
-        // Verwendungen anzeigen
-        bool uses = false;
-        foreach (var item in data.Where(item => !item.Done)) // Nur nicht erledigte Punkte anzeigen
-        {
-            if (item.DependenceIds.Contains(currentItem.Id))
-            {
-                if (!uses)
-                {
-                    uses = true;
-                    Console.WriteLine();
-                    Console.WriteLine("Verwendungen:");
-                }
-                i += 1;
-                item.Position = i;
-                Console.WriteLine(item.Position + " " + item.Name);
-            }
-        }
-    }
-
-    Console.WriteLine();
-
+    // Hilfe und Befehle anzeigen
     if (showHelp)
     {
         Console.WriteLine("? Hilfe ausblenden");
@@ -397,6 +296,130 @@ void showList()
         Console.WriteLine("? Hilfe einblenden");
     }
     Console.WriteLine();
+    Console.WriteLine();
+
+
+    // Daten anzeigen
+    {
+        foreach (var item in data)
+        {
+            item.Position = 0;
+        }
+
+        // Pfad/Oberpunkte anzeigen
+        Console.WriteLine(getItemPath(currentItem));
+        Console.WriteLine();
+
+
+        string done = "";
+        if (currentItem != null && currentItem.Done)
+        {
+            done = "Erledigt ";
+        }
+        string userString = "";
+        if (currentItem.UserName != "" && currentItem.UserName != currentUserName)
+        {
+            userString = currentItem.UserName + " ";
+        }
+        Console.WriteLine(currentItem.Name + " (" + userString + done + currentItem.TimeStamp + ")");
+        Console.WriteLine();
+
+        if (currentItem.Name.StartsWith("Termine"))
+        {
+            currentList = currentList.OrderBy(i => dateFromWord(i.Name)).ToList();
+        }
+        else
+        {
+            currentList = currentList.OrderBy(i => i.TimeStamp).ToList();
+        }
+
+
+        int i = 0;
+        foreach (MyClass item in currentList)
+        {
+            // Pluszeigen setzen, wenn Unterpunkte, Abhängikeiten oder Verwendungen im Unterpunkt sind
+            string plus = "";
+            i += 1;
+            item.Position = i;
+            if (data.Where(child => matchList(child, item)).ToList().Count > 0 || item.DependenceIds.Count > 0)
+            {
+                plus = " +";
+            }
+            if (plus == "")
+            {
+                // Verwendungen prüfen
+                foreach (var depItem in data.Where(item => item.File == currentItem.File && !item.Done))
+                {
+                    if (depItem.DependenceIds.Contains(item.Id))
+                    {
+                        if (isInfoForUser(depItem, item))
+                        {
+                            plus = " +";
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Wenn eine Anhängigkeit hinteregt ist, dann direkt mit anzeigen
+            string depString = "";
+            if (item.DependenceIds.Count == 1)
+            {
+                MyClass depItem = data.Find(i => i.File == currentItem.File && i.Id == item.DependenceIds[0]);
+                if (depItem != null)
+                {
+                    depString = " -> " + depItem.Name;
+                }
+            }
+
+            setParameter(item.Name);
+
+            done = "";
+            if (item.Done)
+            {
+                done = " (Erledigt)";
+            }
+            Console.WriteLine(item.Position + "   " + replaceParameterValueInText(item.Name) + depString + done + plus);
+        }
+
+        // Anhängigkeiten anzeigen
+        if (currentItem.DependenceIds.Count > 0)
+        {
+            Console.WriteLine();
+            Console.WriteLine("Anhängigkeiten:");
+            foreach (int id in currentItem.DependenceIds)
+            {
+                MyClass depItem = data.Find(item => item.File == currentItem.File && item.Id == id);
+                if (depItem != null)
+                {
+                    i += 1;
+                    depItem.Position = i;
+                    Console.WriteLine(depItem.Position + "   " + depItem.Name);
+                }
+            }
+        }
+
+        // Verwendungen anzeigen
+        bool uses = false;
+        foreach (var item in data.Where(item => !item.Done)) // Nur nicht erledigte Punkte anzeigen
+        {
+            if (item.DependenceIds.Contains(currentItem.Id))
+            {
+                if (!uses)
+                {
+                    uses = true;
+                    Console.WriteLine();
+                    Console.WriteLine("Verwendungen:");
+                }
+                i += 1;
+                item.Position = i;
+                Console.WriteLine(item.Position + "   " + item.Name);
+            }
+        }
+    }
+
+    Console.WriteLine();
+
 
     if (input == "+" || input == "*")
     {
@@ -646,7 +669,7 @@ bool isInfoForUser(MyClass item, MyClass parentItem)
 
 MyClass getParentItem(MyClass item)
 {
-    return data.Find(i => i.Id == item.ParentId && i.File == item.File || i.Name == item.File && i.ParentId == 1);
+    return data.Find(i => i.Id == item.ParentId && i.File == item.File || i.Name == item.File && item.ParentId == 1);
 }
 
 // Suche im ganzen Baum 
@@ -746,6 +769,20 @@ bool isSynonymInText(string text, string word)
     return found;
 }
 
+string getItemPath(MyClass item)
+{
+    string path = "";
+    string help = "";
+    MyClass parentItem = getParentItem(item);
+    while (parentItem != null && parentItem.ParentId > 1)
+    {
+        path += help + parentItem.Name;
+        parentItem = getParentItem(parentItem);
+        help = " < ";
+    }
+    return path;
+}
+
 List<MyClass> dependenceList(MyClass item)
 {
     List<MyClass> list = new();
@@ -800,6 +837,9 @@ void readData()
     {
         data.Add(item);
     }
+
+    // Absteigend nach Datum sortieren
+    data = data.OrderByDescending(item => item.TimeStamp).ToList(); 
 }
 
 void saveDataItem()
