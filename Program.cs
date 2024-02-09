@@ -250,12 +250,12 @@ void showList()
             Console.WriteLine("* Ändern");
             if (cutItem is null)
             {
-                Console.WriteLine("< Ausschneiden");
+                Console.WriteLine("x Ausschneiden");
                 Console.WriteLine("- Löschen");
             }
             else
             {
-                Console.WriteLine("> Ausgeschnittenen Punkt einfügen");
+                Console.WriteLine("v Ausgeschnittenen Punkt einfügen");
             }
 
             if (currentItem.Done)
@@ -269,11 +269,11 @@ void showList()
 
             if (dependenceItem is null)
             {
-                Console.WriteLine("v Verknüpfung/Abhängigkeit hinzufügen");
+                Console.WriteLine("a Abhängigkeit/Verknüpfung hinzufügen");
             }
             else
             {
-                Console.WriteLine("v Verknüpfung/Abhängigkeit setzen");
+                Console.WriteLine("a Verknüpfung/Abhängigkeit setzen");
             }
         }
 
@@ -289,7 +289,7 @@ void showList()
         {
             Console.WriteLine("s Startseite");
         }
-        Console.WriteLine("x Ende");
+        Console.WriteLine("e Ende");
     }
     else
     {
@@ -440,7 +440,7 @@ void showList()
         searchCounter = 1;
     }
 
-    if (input != "x" && input != "s")
+    if (input != "e" && input != "s")
     {
         if (input == "?")
         {
@@ -481,7 +481,7 @@ void showList()
                         }
                         else
                         {
-                            if (input == "v")
+                            if (input == "a")
                             {
                                 // Verknüpfung/Abhängigkeit
                                 if (dependenceItem is null)
@@ -506,7 +506,7 @@ void showList()
                                 }
                                 else
                                 {
-                                    if (input == "<" || input == ">")
+                                    if (input == "x" || input == "v")
                                     {
                                         // Ausschneiden
                                         if (cutItem is null)
