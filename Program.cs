@@ -273,7 +273,7 @@ void showList()
             }
             else
             {
-                Console.WriteLine("a Verknüpfung/Abhängigkeit setzen");
+                Console.WriteLine("a Abhängigkeit/Verknüpfung setzen");
             }
         }
 
@@ -618,7 +618,7 @@ void showList()
                                                             }
                                                         }
 
-                                                        if (!found)
+                                                        if (!found || searchCounter > 1)
                                                         {
                                                             // in allen Daten suchen
                                                             MyClass foundItem = searchItem(input);
